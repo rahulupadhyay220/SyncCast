@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 170 44" width="170" height="44" fill="none">
+  <defs>
+    <!-- Obsidian Glass Gradient -->
+    <linearGradient id="scPillBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stopColor="#1a1d24" />
+      <stop offset="50%" stopColor="#0d0f15" />
+      <stop offset="100%" stopColor="#050608" />
+    </linearGradient>
+
+    <!-- Specular Rim Gradient -->
+    <linearGradient id="scRim" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stopColor="rgba(255, 255, 255, 0.42)" />
+      <stop offset="35%" stopColor="rgba(255, 255, 255, 0.08)" />
+      <stop offset="70%" stopColor="rgba(229, 9, 20, 0.25)" />
+      <stop offset="100%" stopColor="rgba(229, 9, 20, 0.75)" />
+    </linearGradient>
+
+    <!-- Radiant Cinema Playhead Gradient -->
+    <linearGradient id="scPlayGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stopColor="#ff4148" />
+      <stop offset="45%" stopColor="#e50914" />
+      <stop offset="100%" stopColor="#9e060f" />
+    </linearGradient>
+
+    <!-- Upper Sync Arc Gradient -->
+    <linearGradient id="scSyncBlade" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stopColor="#ffffff" stopOpacity="0.95" />
+      <stop offset="50%" stopColor="#ff6269" stopOpacity="0.8" />
+      <stop offset="100%" stopColor="#e50914" stopOpacity="0.4" />
+    </linearGradient>
+
+    <!-- Wordmark Red Gradient -->
+    <linearGradient id="scTextRed" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stopColor="#ff383f" />
+      <stop offset="50%" stopColor="#e50914" />
+      <stop offset="100%" stopColor="#ff5960" />
+    </linearGradient>
+
+    <!-- Cinema Neon Glow -->
+    <filter id="scNeonGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2.5" floodColor="#e50914" floodOpacity="0.75" />
+    </filter>
+  </defs>
+
+  <!-- Emblem Icon (40x40 at x=2, y=2) -->
+  <g transform="translate(2, 2)">
+    <!-- Base Squircle -->
+    <rect x="0" y="0" width="36" height="36" rx="10" fill="url(#scPillBg)" />
+    <rect x="0" y="0" width="36" height="36" rx="10" stroke="url(#scRim)" stroke-width="1.2" />
+
+    <!-- Ambient Core Glow -->
+    <circle cx="18" cy="18" r="13" fill="#e50914" fill-opacity="0.1" />
+
+    <!-- Sync Orbit Arcs -->
+    <path d="M 9 11.5 C 13 6.5 23 6.5 27 11.5" stroke="url(#scSyncBlade)" stroke-width="2" stroke-linecap="round" />
+    <circle cx="27" cy="11.5" r="1.8" fill="#ff4148" filter="url(#scNeonGlow)" />
+
+    <path d="M 27 24.5 C 23 29.5 13 29.5 9 24.5" stroke="url(#scPlayGrad)" stroke-width="2" stroke-linecap="round" />
+    <circle cx="9" cy="24.5" r="1.8" fill="#ffffff" />
+
+    <!-- Synchronized Twin Playheads -->
+    <g filter="url(#scNeonGlow)">
+      <path d="M 12.5 12.8 C 12.5 12.0 13.4 11.5 14.1 11.9 L 21.2 16.9 C 21.8 17.4 21.8 18.6 21.2 19.1 L 14.1 24.1 C 13.4 24.5 12.5 24.0 12.5 23.2 Z" fill="rgba(255, 255, 255, 0.22)" />
+      <path d="M 15 12.2 C 15 11.3 16.0 10.7 16.8 11.2 L 25.2 16.9 C 26.0 17.4 26.0 18.6 25.2 19.1 L 16.8 24.8 C 16.0 25.3 15 24.7 15 23.8 Z" fill="url(#scPlayGrad)" />
+      <path d="M 15.5 12.5 L 24.2 18" stroke="rgba(255, 255, 255, 0.5)" stroke-width="0.8" stroke-linecap="round" />
+    </g>
+  </g>
+
+  <!-- Typography: SyncCast (Optic White + Radiant Crimson) -->
+  <text x="48" y="27.5" font-family="'Plus Jakarta Sans', system-ui, -apple-system, sans-serif" font-size="21" font-weight="800" letter-spacing="-0.035em" fill="#ffffff">Sync<tspan fill="url(#scTextRed)" font-weight="900">Cast</tspan></text>
+</svg>
