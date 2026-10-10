@@ -16,7 +16,7 @@ export const connectDatabase = async () => {
   }
 
   const options = {
-    serverSelectionTimeoutMS: 5000,
+    serverSelectionTimeoutMS: 10000,
     socketTimeoutMS: 45000,
   };
 

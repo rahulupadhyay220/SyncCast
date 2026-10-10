@@ -8,7 +8,7 @@ export function AdminDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('system');
 
-  const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080';
+  const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://synccast-ens9.onrender.com';
 
   const loadTelemetry = useCallback(async () => {
     try {

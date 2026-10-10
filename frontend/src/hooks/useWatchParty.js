@@ -54,7 +54,7 @@ const INITIAL_PARTICIPANTS = [
 const INITIAL_MESSAGES = [];
 
 export function useWatchParty() {
-  const socketUrl = import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_SOCKET_URL || 'http://localhost:8080';
+  const socketUrl = import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_SOCKET_URL || 'https://synccast-ens9.onrender.com';
   const { user } = useAuth();
   const signedInName = getUserDisplayName(user);
 
