@@ -66,12 +66,24 @@ export function AuthCallbackPage() {
           return;
         }
 
+        const isSignupConfirmation = searchParams.get('flow') === 'signup' || hashType === 'signup';
+        if (isSignupConfirmation) {
+          const { error: signOutError } = await supabase.auth.signOut({ scope: 'local' });
+          if (signOutError) throw signOutError;
+        }
+
         // Signup or standard email confirmation
         if (isMounted) {
           setStatus('success');
-          setMessage('Email confirmed successfully! Taking you to SyncCast...');
+          setMessage(
+            isSignupConfirmation
+              ? 'Email confirmed successfully! Redirecting you to sign in...'
+              : 'Email confirmed successfully! Taking you to SyncCast...'
+          );
           setTimeout(() => {
-            if (data?.session) {
+            if (isSignupConfirmation) {
+              navigate('/sign-in?verified=true', { replace: true });
+            } else if (data?.session) {
               navigate('/dashboard', { replace: true });
             } else {
               navigate('/sign-in?verified=true', { replace: true });

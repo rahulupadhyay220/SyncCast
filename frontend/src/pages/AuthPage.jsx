@@ -21,7 +21,7 @@ import { Logo } from '../components/Logo';
 export function AuthPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const { signIn, signUp, resendVerificationEmail, isSignedIn, loading, isConfigured } = useAuth();
 
   // Derive mode directly from URL path or search query (?mode=signup or /sign-up)
@@ -105,11 +105,12 @@ export function AuthPage() {
     setErrorMessage('');
     setSuccessMessage('');
     setUnverifiedEmail('');
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      next.set('mode', newMode);
-      return next;
-    }, { replace: true });
+    const next = new URLSearchParams(searchParams);
+    next.delete('mode');
+    navigate({
+      pathname: newMode === 'signup' ? '/sign-up' : '/sign-in',
+      search: next.toString(),
+    });
   };
 
   // Rate Limiting helper constants (OWASP authentication protection)
@@ -312,9 +313,9 @@ export function AuthPage() {
             <div className="mb-5 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs flex items-start gap-2.5">
               <AlertCircle className="w-4 h-4 shrink-0 text-amber-400 mt-0.5" />
               <div>
-                <p className="font-semibold text-amber-200">Supabase Setup Notice</p>
-                <p className="text-[11px] text-amber-300/80 mt-0.5">
-                  Auth is using placeholder credentials. To enable live authentication, configure your real Supabase URL and Anon Key in .env.local.
+                <p className="font-semibold text-amber-200">Local Development Mode Active</p>
+                <p className="text-[11px] text-amber-300/80 mt-0.5 leading-relaxed">
+                  Supabase credentials are set to placeholder in <code className="text-white bg-black/40 px-1 py-0.5 rounded font-mono text-[10px]">.env.local</code>. Account registration and login now work instantly in Local Mode! To enable cloud sync with Supabase, add your real Project URL and Anon Key.
                 </p>
               </div>
             </div>

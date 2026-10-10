@@ -13,7 +13,6 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
-      'react-player/youtube': 'react-player',
     },
   },
   build: {
@@ -25,13 +24,13 @@ export default defineConfig({
             if (id.includes('react') || id.includes('react-dom') || id.includes('react-router')) {
               return 'vendor-react';
             }
-            if (id.includes('react-player') || id.includes('react-youtube')) {
+            if (id.includes('react-youtube')) {
               return 'vendor-player';
             }
             if (id.includes('@supabase')) {
               return 'vendor-supabase';
             }
-            if (id.includes('lucide-react') || id.includes('canvas-confetti')) {
+            if (id.includes('lucide-react')) {
               return 'vendor-ui';
             }
             return 'vendor';

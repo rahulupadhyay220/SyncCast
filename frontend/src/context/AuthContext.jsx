@@ -31,6 +31,23 @@ export function AuthProvider({ children }) {
 
     async function initializeAuth() {
       try {
+        if (!isSupabaseConfigured) {
+          // Restore local development / demo session
+          const storedLocalSession = typeof window !== 'undefined' ? localStorage.getItem('synccast_local_session') : null;
+          if (storedLocalSession) {
+            try {
+              const parsed = JSON.parse(storedLocalSession);
+              if (mounted && parsed?.user) {
+                setSession(parsed);
+                setUser(parsed.user);
+              }
+            } catch (e) {
+              console.warn('[Local Auth] Failed to restore session:', e);
+            }
+          }
+          return;
+        }
+
         const { data, error } = await supabase.auth.getSession();
         if (error) {
           console.warn('[Supabase Auth] getSession notice:', error.message);
@@ -49,6 +66,12 @@ export function AuthProvider({ children }) {
     }
 
     initializeAuth();
+
+    if (!isSupabaseConfigured) {
+      return () => {
+        mounted = false;
+      };
+    }
 
     // Listen to real-time auth state transitions
     const {
@@ -76,24 +99,93 @@ export function AuthProvider({ children }) {
   // 1. User Registration (Sign Up)
   const signUp = useCallback(async ({ email, password, fullName }) => {
     setAuthError(null);
+    const cleanEmail = email.trim().toLowerCase();
+    const effectiveName = fullName?.trim() || cleanEmail.split('@')[0];
+
+    // Local Development / Demo Mode Fallback
+    if (!isSupabaseConfigured) {
+      try {
+        let accounts = [];
+        try {
+          accounts = JSON.parse(localStorage.getItem('synccast_local_accounts') || '[]');
+        } catch {}
+
+        if (accounts.some((acc) => acc.email === cleanEmail)) {
+          const dupMsg = 'An account with this email address already exists. Please sign in instead.';
+          setAuthError(dupMsg);
+          return { success: false, error: dupMsg };
+        }
+
+        const userId = 'usr_' + Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
+        const demoUser = {
+          id: userId,
+          email: cleanEmail,
+          user_metadata: {
+            full_name: effectiveName,
+            display_name: effectiveName,
+            avatar_color: 'bg-red-600',
+          },
+          email_confirmed_at: new Date().toISOString(),
+          created_at: new Date().toISOString(),
+          last_sign_in_at: new Date().toISOString(),
+          app_metadata: { provider: 'local' },
+        };
+
+        const demoSession = {
+          access_token: 'local-token-' + userId,
+          token_type: 'bearer',
+          user: demoUser,
+          expires_at: Math.floor(Date.now() / 1000) + 3600 * 24 * 7,
+        };
+
+        accounts.push({
+          id: userId,
+          email: cleanEmail,
+          password,
+          fullName: effectiveName,
+          createdAt: new Date().toISOString(),
+        });
+        localStorage.setItem('synccast_local_accounts', JSON.stringify(accounts));
+        localStorage.setItem('synccast_local_session', JSON.stringify(demoSession));
+
+        setUser(demoUser);
+        setSession(demoSession);
+
+        return {
+          success: true,
+          user: demoUser,
+          session: demoSession,
+          requiresEmailConfirmation: false,
+        };
+      } catch (err) {
+        const msg = err.message || 'An error occurred during local registration.';
+        setAuthError(msg);
+        return { success: false, error: msg };
+      }
+    }
+
+    // Live Supabase Authentication
     try {
-      const cleanEmail = email.trim().toLowerCase();
       const origin = typeof window !== 'undefined' ? window.location.origin : '';
       const { data, error } = await supabase.auth.signUp({
         email: cleanEmail,
         password,
         options: {
           data: {
-            full_name: fullName?.trim() || cleanEmail.split('@')[0],
-            display_name: fullName?.trim() || cleanEmail.split('@')[0],
+            full_name: effectiveName,
+            display_name: effectiveName,
           },
-          emailRedirectTo: `${origin}/auth/callback`,
+          emailRedirectTo: `${origin}/auth/callback?flow=signup`,
         },
       });
 
       if (error) {
-        setAuthError(error.message);
-        return { success: false, error: error.message };
+        let msg = error.message;
+        if (msg === 'Failed to fetch' || msg.includes('Failed to fetch')) {
+          msg = 'Unable to connect to Supabase (Failed to fetch). Please verify your VITE_SUPABASE_URL in frontend/.env.local and check your internet connection.';
+        }
+        setAuthError(msg);
+        return { success: false, error: msg };
       }
 
       // Check if duplicate user without confirmation
@@ -110,7 +202,10 @@ export function AuthProvider({ children }) {
         requiresEmailConfirmation: !data.session,
       };
     } catch (err) {
-      const msg = err.message || 'An error occurred during registration.';
+      let msg = err.message || 'An error occurred during registration.';
+      if (msg === 'Failed to fetch' || msg.includes('Failed to fetch')) {
+        msg = 'Unable to connect to Supabase (Failed to fetch). Please verify your VITE_SUPABASE_URL in frontend/.env.local and check your internet connection.';
+      }
       setAuthError(msg);
       return { success: false, error: msg };
     }
@@ -119,8 +214,60 @@ export function AuthProvider({ children }) {
   // 2. User Login (Sign In)
   const signIn = useCallback(async ({ email, password }) => {
     setAuthError(null);
+    const cleanEmail = email.trim().toLowerCase();
+
+    // Local Development / Demo Mode Fallback
+    if (!isSupabaseConfigured) {
+      try {
+        let accounts = [];
+        try {
+          accounts = JSON.parse(localStorage.getItem('synccast_local_accounts') || '[]');
+        } catch {}
+
+        const matchedAccount = accounts.find((acc) => acc.email === cleanEmail);
+        if (matchedAccount && matchedAccount.password && matchedAccount.password !== password) {
+          const msg = 'Invalid email or password.';
+          setAuthError(msg);
+          return { success: false, error: msg };
+        }
+
+        const effectiveName = matchedAccount?.fullName || cleanEmail.split('@')[0];
+        const userId = matchedAccount?.id || ('usr_' + Math.random().toString(36).substring(2, 9));
+        const demoUser = {
+          id: userId,
+          email: cleanEmail,
+          user_metadata: {
+            full_name: effectiveName,
+            display_name: effectiveName,
+            avatar_color: 'bg-red-600',
+          },
+          email_confirmed_at: new Date().toISOString(),
+          created_at: matchedAccount?.createdAt || new Date().toISOString(),
+          last_sign_in_at: new Date().toISOString(),
+          app_metadata: { provider: 'local' },
+        };
+
+        const demoSession = {
+          access_token: 'local-token-' + userId,
+          token_type: 'bearer',
+          user: demoUser,
+          expires_at: Math.floor(Date.now() / 1000) + 3600 * 24 * 7,
+        };
+
+        localStorage.setItem('synccast_local_session', JSON.stringify(demoSession));
+        setUser(demoUser);
+        setSession(demoSession);
+
+        return { success: true, user: demoUser, session: demoSession };
+      } catch (err) {
+        const msg = err.message || 'Failed to sign in locally.';
+        setAuthError(msg);
+        return { success: false, error: msg };
+      }
+    }
+
+    // Live Supabase Authentication
     try {
-      const cleanEmail = email.trim().toLowerCase();
       const { data, error } = await supabase.auth.signInWithPassword({
         email: cleanEmail,
         password,
@@ -128,7 +275,9 @@ export function AuthProvider({ children }) {
 
       if (error) {
         let msg = error.message;
-        if (msg.includes('Email not confirmed')) {
+        if (msg === 'Failed to fetch' || msg.includes('Failed to fetch')) {
+          msg = 'Unable to connect to Supabase (Failed to fetch). Please verify your VITE_SUPABASE_URL in frontend/.env.local and check your internet connection.';
+        } else if (msg.includes('Email not confirmed')) {
           msg = 'Please verify your email address before signing in. Check your inbox or request a new confirmation link.';
         } else if (msg.includes('Invalid login credentials')) {
           msg = 'Invalid email or password. Please verify your credentials and try again.';
@@ -141,7 +290,10 @@ export function AuthProvider({ children }) {
       setSession(data.session);
       return { success: true, user: data.user, session: data.session };
     } catch (err) {
-      const msg = err.message || 'Failed to sign in. Please try again.';
+      let msg = err.message || 'Failed to sign in. Please try again.';
+      if (msg === 'Failed to fetch' || msg.includes('Failed to fetch')) {
+        msg = 'Unable to connect to Supabase (Failed to fetch). Please verify your VITE_SUPABASE_URL in frontend/.env.local and check your internet connection.';
+      }
       setAuthError(msg);
       return { success: false, error: msg };
     }
@@ -150,10 +302,15 @@ export function AuthProvider({ children }) {
   // 3. Logout
   const signOut = useCallback(async () => {
     try {
-      await supabase.auth.signOut();
+      if (isSupabaseConfigured) {
+        await supabase.auth.signOut();
+      }
     } catch (err) {
       console.warn('[Supabase Auth] SignOut notice:', err);
     } finally {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('synccast_local_session');
+      }
       setUser(null);
       setSession(null);
       try {
@@ -166,6 +323,9 @@ export function AuthProvider({ children }) {
   // 4. Forgot Password Flow
   const resetPassword = useCallback(async (email) => {
     setAuthError(null);
+    if (!isSupabaseConfigured) {
+      return { success: true };
+    }
     try {
       const cleanEmail = email.trim().toLowerCase();
       const origin = typeof window !== 'undefined' ? window.location.origin : '';
@@ -174,8 +334,12 @@ export function AuthProvider({ children }) {
       });
 
       if (error) {
-        setAuthError(error.message);
-        return { success: false, error: error.message };
+        let msg = error.message;
+        if (msg === 'Failed to fetch' || msg.includes('Failed to fetch')) {
+          msg = 'Unable to connect to Supabase. Please verify your network and settings.';
+        }
+        setAuthError(msg);
+        return { success: false, error: msg };
       }
       return { success: true };
     } catch (err) {
@@ -188,6 +352,20 @@ export function AuthProvider({ children }) {
   // 5. Update Password (from Reset Password page or Profile)
   const updatePassword = useCallback(async (newPassword) => {
     setAuthError(null);
+    if (!isSupabaseConfigured) {
+      try {
+        let accounts = JSON.parse(localStorage.getItem('synccast_local_accounts') || '[]');
+        if (user?.email) {
+          accounts = accounts.map((acc) =>
+            acc.email === user.email ? { ...acc, password: newPassword } : acc
+          );
+          localStorage.setItem('synccast_local_accounts', JSON.stringify(accounts));
+        }
+        return { success: true };
+      } catch {
+        return { success: true };
+      }
+    }
     try {
       const { data, error } = await supabase.auth.updateUser({
         password: newPassword,
@@ -203,11 +381,28 @@ export function AuthProvider({ children }) {
       setAuthError(msg);
       return { success: false, error: msg };
     }
-  }, []);
+  }, [user]);
 
   // 6. Change Email Address
   const updateEmail = useCallback(async (newEmail) => {
     setAuthError(null);
+    if (!isSupabaseConfigured) {
+      if (!user) return { success: false, error: 'No active session.' };
+      const cleanEmail = newEmail.trim().toLowerCase();
+      const updatedUser = { ...user, email: cleanEmail };
+      setUser(updatedUser);
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem('synccast_local_session');
+        if (stored) {
+          try {
+            const parsed = JSON.parse(stored);
+            parsed.user = updatedUser;
+            localStorage.setItem('synccast_local_session', JSON.stringify(parsed));
+          } catch {}
+        }
+      }
+      return { success: true, user: updatedUser };
+    }
     try {
       const cleanEmail = newEmail.trim().toLowerCase();
       const origin = typeof window !== 'undefined' ? window.location.origin : '';
@@ -225,11 +420,29 @@ export function AuthProvider({ children }) {
       setAuthError(msg);
       return { success: false, error: msg };
     }
-  }, []);
+  }, [user]);
 
   // 7. Update User Profile Metadata
   const updateProfile = useCallback(async (updates) => {
     setAuthError(null);
+    if (!isSupabaseConfigured) {
+      if (!user) return { success: false, error: 'No active session.' };
+      const updatedUser = {
+        ...user,
+        user_metadata: {
+          ...user.user_metadata,
+          ...updates,
+        },
+      };
+      setUser(updatedUser);
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem('synccast_local_session');
+        const parsed = stored ? JSON.parse(stored) : { user: updatedUser, access_token: 'local-token' };
+        parsed.user = updatedUser;
+        localStorage.setItem('synccast_local_session', JSON.stringify(parsed));
+      }
+      return { success: true, user: updatedUser };
+    }
     try {
       const { data, error } = await supabase.auth.updateUser({
         data: updates,
@@ -245,12 +458,15 @@ export function AuthProvider({ children }) {
       setAuthError(msg);
       return { success: false, error: msg };
     }
-  }, []);
+  }, [user]);
 
   // 8. Re-authentication for Sensitive Actions
   const reauthenticate = useCallback(async (currentPassword) => {
     if (!user?.email) {
       return { success: false, error: 'No active user found to re-authenticate.' };
+    }
+    if (!isSupabaseConfigured) {
+      return { success: true };
     }
     try {
       const { error } = await supabase.auth.signInWithPassword({
@@ -269,6 +485,9 @@ export function AuthProvider({ children }) {
   // 9. Resend Verification Email
   const resendVerificationEmail = useCallback(async (email) => {
     setAuthError(null);
+    if (!isSupabaseConfigured) {
+      return { success: true };
+    }
     try {
       const targetEmail = (email || user?.email || '').trim().toLowerCase();
       if (!targetEmail) {
@@ -279,7 +498,7 @@ export function AuthProvider({ children }) {
         type: 'signup',
         email: targetEmail,
         options: {
-          emailRedirectTo: `${origin}/auth/callback`,
+          emailRedirectTo: `${origin}/auth/callback?flow=signup`,
         },
       });
       if (error) {
