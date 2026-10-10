@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Play, ChevronLeft, ChevronRight, Film, Clock, Star, Sparkles } from 'lucide-react';
+import { Play, ChevronLeft, ChevronRight, Film } from 'lucide-react';
 import { FEATURED_MOVIES } from '../../data/movies';
 
 export function HeroSection({ onStartParty, onJoinParty, onSelectMovie }) {
@@ -66,28 +66,28 @@ export function HeroSection({ onStartParty, onJoinParty, onSelectMovie }) {
       </div>
 
       {/* Main Content Area */}
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full pt-16 sm:pt-24 space-y-8">
-        <div className="max-w-2xl space-y-4 animate-fadeIn">
+      <div className="relative z-10 max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 w-full pt-12 sm:pt-24 space-y-6 sm:space-y-8">
+        <div className="max-w-2xl space-y-3 sm:space-y-4 animate-fadeIn">
           {/* Minimalist Status Badge */}
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-zinc-900/80 backdrop-blur-md border border-white/10 text-xs font-mono text-zinc-300">
+          <div className="inline-flex items-center gap-2 px-2.5 sm:px-3 py-1 rounded-lg bg-zinc-900/80 backdrop-blur-md border border-white/10 text-xs font-mono text-zinc-300">
             <span className="w-1.5 h-1.5 rounded-sm bg-[#e50914]" />
-            <span className="uppercase tracking-wider text-[11px] font-semibold text-zinc-300">Cinema Premiere</span>
+            <span className="uppercase tracking-wider text-[10px] sm:text-[11px] font-semibold text-zinc-300">Cinema Premiere</span>
             <span className="text-zinc-600">|</span>
-            <span className="text-zinc-400 font-normal">{active.badge}</span>
+            <span className="text-zinc-400 font-normal text-[11px]">{active.badge}</span>
           </div>
 
           {/* Title */}
-          <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black text-white tracking-tight leading-[1.08]">
+          <h1 className="text-2xl sm:text-5xl lg:text-6xl font-black text-white tracking-tight leading-[1.1]">
             {active.title}
           </h1>
 
           {/* Synopsis */}
-          <p className="text-xs sm:text-sm text-zinc-300 font-normal leading-relaxed max-w-xl line-clamp-3">
+          <p className="text-xs sm:text-sm text-zinc-300 font-normal leading-relaxed max-w-xl line-clamp-2 sm:line-clamp-3">
             {active.tagline}
           </p>
 
           {/* Meta Info Bar (IMDb, Year, Runtime, 4K) */}
-          <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-400 font-mono pt-1">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs text-zinc-400 font-mono pt-1">
             <div className="flex items-center gap-1.5 text-zinc-200">
               <span className="px-1.5 py-0.5 rounded bg-zinc-800 border border-white/10 text-zinc-200 font-mono text-[10px]">
                 IMDb
@@ -110,7 +110,7 @@ export function HeroSection({ onStartParty, onJoinParty, onSelectMovie }) {
             {active.tags.map((tag) => (
               <span
                 key={tag}
-                className="px-2.5 py-0.5 rounded-md bg-zinc-900/80 border border-white/10 text-zinc-400 text-[11px] font-medium"
+                className="px-2 sm:px-2.5 py-0.5 rounded-md bg-zinc-900/80 border border-white/10 text-zinc-400 text-[10px] sm:text-[11px] font-medium"
               >
                 {tag}
               </span>
@@ -118,10 +118,10 @@ export function HeroSection({ onStartParty, onJoinParty, onSelectMovie }) {
           </div>
 
           {/* Minimalist CTA Buttons */}
-          <div className="flex items-center gap-3 pt-2">
+          <div className="flex items-center gap-2.5 sm:gap-3 pt-2 flex-wrap">
             <button
               onClick={handleWatchNow}
-              className="px-6 py-2.5 rounded-lg bg-[#e50914] hover:bg-[#c90812] active:bg-[#a5070f] text-white font-semibold text-xs sm:text-sm flex items-center gap-2 transition-colors cursor-pointer shadow-sm"
+              className="px-5 sm:px-6 py-2 sm:py-2.5 rounded-lg bg-[#e50914] hover:bg-[#c90812] active:bg-[#a5070f] text-white font-semibold text-xs sm:text-sm flex items-center gap-2 transition-colors cursor-pointer shadow-sm"
             >
               <Play className="w-3.5 h-3.5 fill-white" />
               <span>Watch Now</span>
@@ -129,7 +129,7 @@ export function HeroSection({ onStartParty, onJoinParty, onSelectMovie }) {
 
             <button
               onClick={onJoinParty}
-              className="px-5 py-2.5 rounded-lg bg-zinc-900/80 hover:bg-zinc-800 text-zinc-200 hover:text-white font-medium text-xs sm:text-sm border border-white/10 hover:border-white/20 transition-colors cursor-pointer"
+              className="px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg bg-zinc-900/80 hover:bg-zinc-800 text-zinc-200 hover:text-white font-medium text-xs sm:text-sm border border-white/10 hover:border-white/20 transition-colors cursor-pointer"
             >
               <span>Join Room</span>
             </button>

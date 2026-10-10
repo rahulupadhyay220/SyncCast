@@ -61,7 +61,7 @@ export function ShareRoomModal({
   onClose,
   roomCode,
   movieTitle,
-  userName = 'Alex R.',
+  userName = '',
 }) {
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
@@ -164,7 +164,7 @@ export function ShareRoomModal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-lg bg-[#08090d]/95 backdrop-blur-2xl border border-white/[0.08] rounded-2xl p-5 sm:p-7 shadow-[0_25px_70px_-15px_rgba(0,0,0,0.95)] ring-1 ring-white/[0.04] text-zinc-100 relative space-y-5 max-h-[90vh] overflow-y-auto scrollbar-none"
+        className="w-full max-w-lg bg-[#08090d]/95 backdrop-blur-2xl border border-white/[0.08] rounded-2xl p-4 sm:p-7 shadow-[0_25px_70px_-15px_rgba(0,0,0,0.95)] ring-1 ring-white/[0.04] text-zinc-100 relative space-y-4 sm:space-y-5 max-h-[90vh] overflow-y-auto scrollbar-none"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Subtle Designer Ambient Flare */}
@@ -243,21 +243,22 @@ export function ShareRoomModal({
             </div>
             <button
               onClick={() => copyToClipboard(shareUrl, 'link')}
-              className={`px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
-                copiedLink
+              className={`px-3 sm:px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${copiedLink
                   ? 'bg-emerald-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.35)]'
                   : 'bg-[#e50914] hover:bg-[#c90812] text-white shadow-[0_0_15px_rgba(229,9,20,0.25)] active:scale-95'
-              }`}
+                }`}
             >
               {copiedLink ? (
                 <>
                   <Check className="w-3.5 h-3.5" />
-                  <span>Copied</span>
+                  <span className="hidden xs:inline">Copied</span>
+                  <span className="xs:hidden">Done</span>
                 </>
               ) : (
                 <>
                   <Copy className="w-3.5 h-3.5" />
-                  <span>Copy Link</span>
+                  <span className="hidden xs:inline">Copy Link</span>
+                  <span className="xs:hidden">Copy</span>
                 </>
               )}
             </button>

@@ -1,16 +1,16 @@
 import React, { useState } from 'react';
+import { useAuth } from '../context/AuthContext';
 import {
   Play,
   Pause,
   RotateCcw,
   RotateCw,
-  Plus,
-  LogIn,
+  SkipBack,
   Clock,
-  Users,
   ArrowRight,
   Tv,
 } from 'lucide-react';
+import { getUserDisplayName } from '../utils/user';
 
 export function DashboardPage({
   isInRoom,
@@ -21,12 +21,16 @@ export function DashboardPage({
   videoState,
   togglePlay,
   seekTo,
+  restartVideo,
+  skipVideo,
   changeVideoUrl,
   onOpenCreate,
   onOpenJoin,
   onGoToTheater,
   onStartPreset,
 }) {
+  const { user } = useAuth();
+  const signedInName = getUserDisplayName(user);
   const [quickUrl, setQuickUrl] = useState('');
   const [copiedCode, setCopiedCode] = useState(false);
 
@@ -74,7 +78,7 @@ export function DashboardPage({
       watchedDuration: '1h 48m',
       totalDuration: '2h 32m',
       percent: 71,
-      hostName: 'Alex Rivera',
+      hostName: 'Cinema Curator',
       viewersCount: 8,
       url: 'https://www.youtube.com/watch?v=zSWdZVtXT7E',
       badge: '4K Stream',
@@ -102,7 +106,7 @@ export function DashboardPage({
       watchedDuration: '2h 15m',
       totalDuration: 'Continuous Live',
       percent: 100,
-      hostName: 'Alex R. (You)',
+      hostName: signedInName ? `${signedInName} (You)` : (userName ? `${userName} (You)` : 'You (Host)'),
       viewersCount: 26,
       url: 'https://www.youtube.com/watch?v=jfKfPfyJRdk',
       badge: 'Live Lounge',
@@ -162,44 +166,8 @@ export function DashboardPage({
     },
   ];
 
-  const liveRooms = [
-    {
-      id: 'live-1',
-      roomCode: 'SYNC-7729',
-      title: 'The Odyssey (2026) - 4K IMAX Premiere',
-      host: 'Alex Rivera',
-      viewers: 14,
-      currentTiming: '01:48:32 / 02:32:00',
-      progressPercent: 71,
-      status: 'Live',
-      url: 'https://www.youtube.com/watch?v=zSWdZVtXT7E',
-    },
-    {
-      id: 'live-2',
-      roomCode: 'SYNC-1044',
-      title: 'Lofi Girl - 24/7 Synth & Chill Stream',
-      host: 'VibeStation',
-      viewers: 28,
-      currentTiming: 'Live Broadcast',
-      progressPercent: 100,
-      status: 'Live',
-      url: 'https://www.youtube.com/watch?v=jfKfPfyJRdk',
-    },
-    {
-      id: 'live-3',
-      roomCode: 'SYNC-4421',
-      title: 'House of the Dragon - S3 Ep 1 Watchalong',
-      host: 'Daemon_T',
-      viewers: 9,
-      currentTiming: '00:34:10 / 01:02:15',
-      progressPercent: 55,
-      status: 'Live',
-      url: 'https://www.youtube.com/watch?v=DotnJ7tTA34',
-    },
-  ];
-
   return (
-    <div className="min-h-screen bg-[#050608] text-zinc-100 py-8 px-4 sm:px-6 lg:px-8 space-y-8 animate-fadeIn select-none">
+    <div className="min-h-screen bg-[#050608] text-zinc-100 py-6 sm:py-8 px-3 sm:px-6 lg:px-8 space-y-6 sm:space-y-8 animate-fadeIn select-none">
       {/* 1. Header Strip */}
       <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-white/[0.07]">
         <div className="space-y-1">
@@ -213,33 +181,15 @@ export function DashboardPage({
             Monitor synchronized playback timing, resume recent group videos, and launch shared theaters.
           </p>
         </div>
-
-        {/* Quick Launch Buttons */}
-        <div className="flex items-center gap-2">
-          <button
-            onClick={onOpenJoin}
-            className="px-3.5 py-1.5 rounded-lg bg-zinc-900 border border-white/10 hover:border-white/20 text-zinc-300 hover:text-white font-medium text-xs transition-colors flex items-center gap-1.5 cursor-pointer"
-          >
-            <LogIn className="w-3.5 h-3.5" />
-            <span>Enter Code</span>
-          </button>
-          <button
-            onClick={onOpenCreate}
-            className="px-4 py-1.5 rounded-lg bg-[#e50914] hover:bg-[#c90812] text-white font-semibold text-xs transition-colors flex items-center gap-1.5 cursor-pointer"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Host Room</span>
-          </button>
-        </div>
       </div>
 
-      <div className="max-w-7xl mx-auto space-y-8">
+      <div className="max-w-7xl mx-auto space-y-6 sm:space-y-8">
         {/* 2. Active Session Card */}
         {isInRoom ? (
-          <div className="p-6 rounded-xl bg-[#090b10] border border-white/[0.08] space-y-5">
-            <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-white/[0.06]">
-              <div className="flex items-center gap-2.5">
-                <span className="w-2 h-2 rounded-sm bg-emerald-400" />
+          <div className="p-4 sm:p-6 rounded-xl bg-[#090b10] border border-white/[0.08] space-y-4 sm:space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 pb-4 border-b border-white/[0.06]">
+              <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
+                <span className="w-2 h-2 rounded-sm bg-emerald-400 animate-pulse" />
                 <span className="text-xs font-mono font-semibold text-zinc-200">Session Active</span>
                 <span className="text-zinc-600">|</span>
                 <span className="font-mono text-xs text-zinc-400">Code: <strong className="text-white">{roomCode}</strong></span>
@@ -251,13 +201,13 @@ export function DashboardPage({
                 </button>
               </div>
 
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center justify-between sm:justify-end gap-2.5">
                 <span className="text-xs text-zinc-400 font-mono">
                   Role: <strong className="text-zinc-200 uppercase">{simulatedRole}</strong>
                 </span>
                 <button
                   onClick={onGoToTheater}
-                  className="px-3.5 py-1.5 rounded-lg bg-[#e50914] hover:bg-[#c90812] text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                  className="px-3 py-1.5 rounded-lg bg-[#e50914] hover:bg-[#c90812] text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
                 >
                   <Tv className="w-3.5 h-3.5" />
                   <span>Open Theater</span>
@@ -303,9 +253,17 @@ export function DashboardPage({
                 <span className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 block">
                   Playback Controls
                 </span>
-                <div className="flex items-center justify-center gap-2">
+                <div className="flex items-center justify-center gap-1.5">
                   <button
-                    onClick={() => seekTo?.(Math.max(0, (videoState.playedSeconds || 0) - 10))}
+                    onClick={() => restartVideo ? restartVideo() : seekTo?.(0)}
+                    disabled={!canControlPlayback}
+                    className="p-2 rounded-md bg-zinc-800 text-zinc-300 hover:text-white disabled:opacity-40 transition-colors cursor-pointer"
+                    title="Restart from beginning (0:00)"
+                  >
+                    <SkipBack className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => skipVideo ? skipVideo(-10) : seekTo?.(Math.max(0, (videoState.playedSeconds || 0) - 10))}
                     disabled={!canControlPlayback}
                     className="p-2 rounded-md bg-zinc-800 text-zinc-300 hover:text-white disabled:opacity-40 transition-colors cursor-pointer"
                     title="Rewind 10s"
@@ -315,13 +273,13 @@ export function DashboardPage({
                   <button
                     onClick={togglePlay}
                     disabled={!canControlPlayback}
-                    className="p-2.5 rounded-lg bg-[#e50914] hover:bg-[#c90812] text-white disabled:opacity-40 transition-colors cursor-pointer"
+                    className="p-2.5 rounded-lg bg-[#e50914] hover:bg-[#c90812] text-white disabled:opacity-40 transition-colors cursor-pointer shadow-md"
                     title={videoState.playing ? 'Pause' : 'Resume'}
                   >
                     {videoState.playing ? <Pause className="w-4 h-4 fill-white" /> : <Play className="w-4 h-4 fill-white ml-0.5" />}
                   </button>
                   <button
-                    onClick={() => seekTo?.((videoState.playedSeconds || 0) + 10)}
+                    onClick={() => skipVideo ? skipVideo(10) : seekTo?.((videoState.playedSeconds || 0) + 10)}
                     disabled={!canControlPlayback}
                     className="p-2 rounded-md bg-zinc-800 text-zinc-300 hover:text-white disabled:opacity-40 transition-colors cursor-pointer"
                     title="Forward 10s"
@@ -350,21 +308,43 @@ export function DashboardPage({
               </p>
             </div>
 
-            <form onSubmit={handleQuickLaunch} className="w-full md:w-auto flex-1 max-w-md flex gap-2">
-              <input
-                type="url"
-                value={quickUrl}
-                onChange={(e) => setQuickUrl(e.target.value)}
-                placeholder="https://www.youtube.com/watch?v=..."
-                className="flex-1 px-3.5 py-2 rounded-lg bg-zinc-900/60 border border-white/10 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-[#e50914]"
-              />
-              <button
-                type="submit"
-                className="px-4 py-2 rounded-lg bg-[#e50914] hover:bg-[#c90812] text-white font-semibold text-xs shrink-0 transition-colors cursor-pointer"
-              >
-                Launch
-              </button>
-            </form>
+            <div className="w-full md:w-auto flex-1 max-w-md flex flex-col gap-2">
+              <form onSubmit={handleQuickLaunch} className="flex gap-2">
+                <input
+                  type="url"
+                  value={quickUrl}
+                  onChange={(e) => setQuickUrl(e.target.value)}
+                  placeholder="https://www.youtube.com/watch?v=..."
+                  className="flex-1 px-3.5 py-2 rounded-lg bg-zinc-900/60 border border-white/10 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-[#e50914]"
+                />
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-lg bg-[#e50914] hover:bg-[#c90812] text-white font-semibold text-xs shrink-0 transition-colors cursor-pointer"
+                >
+                  Launch
+                </button>
+              </form>
+              <div className="flex items-center gap-2">
+                {onOpenCreate && (
+                  <button
+                    type="button"
+                    onClick={onOpenCreate}
+                    className="px-3 py-1 rounded-md bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-300 hover:text-white text-[11px] font-medium transition-colors cursor-pointer"
+                  >
+                    Host New Party
+                  </button>
+                )}
+                {onOpenJoin && (
+                  <button
+                    type="button"
+                    onClick={onOpenJoin}
+                    className="px-3 py-1 rounded-md bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-300 hover:text-white text-[11px] font-medium transition-colors cursor-pointer"
+                  >
+                    Join with Code
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         )}
 
@@ -521,88 +501,6 @@ export function DashboardPage({
                   >
                     <Play className="w-3 h-3 fill-white" />
                     <span>Resume</span>
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* 6. Active Public Rooms */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between border-b border-white/[0.07] pb-3">
-            <div>
-              <h2 className="text-sm font-bold text-white tracking-tight uppercase font-mono">
-                Public Theaters (Live)
-              </h2>
-              <p className="text-xs text-zinc-400">
-                Join an active broadcast and synchronize frame timing with peers
-              </p>
-            </div>
-            <div className="flex items-center gap-1.5 text-xs text-emerald-400 font-mono">
-              <span className="w-1.5 h-1.5 rounded-sm bg-emerald-400" />
-              <span>3 Rooms Active</span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {liveRooms.map((room) => (
-              <div
-                key={room.id}
-                className="p-4 rounded-xl bg-[#090b10] border border-white/[0.07] hover:border-white/20 transition-all flex flex-col justify-between space-y-3"
-              >
-                <div className="space-y-2.5">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-mono font-bold text-zinc-200 bg-zinc-900 px-2 py-0.5 rounded border border-white/10">
-                      {room.roomCode}
-                    </span>
-                    <span className="text-xs font-mono text-zinc-400 flex items-center gap-1">
-                      <Users className="w-3.5 h-3.5" />
-                      {room.viewers} peers
-                    </span>
-                  </div>
-
-                  <div>
-                    <h3 className="font-bold text-white text-xs sm:text-sm line-clamp-1">
-                      {room.title}
-                    </h3>
-                    <p className="text-xs text-zinc-500 font-mono mt-0.5">
-                      Host: {room.host}
-                    </p>
-                  </div>
-
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400">
-                      <span>Timeline:</span>
-                      <span className="text-zinc-200 font-semibold">{room.currentTiming}</span>
-                    </div>
-                    <div className="w-full h-1 bg-white/10 rounded-sm overflow-hidden">
-                      <div
-                        className="h-full bg-emerald-400 rounded-sm"
-                        style={{ width: `${room.progressPercent}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="pt-3 border-t border-white/[0.06] flex items-center justify-between">
-                  <span className="text-[10px] font-mono text-emerald-400 flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-sm bg-emerald-400" />
-                    {room.status}
-                  </span>
-                  <button
-                    onClick={() =>
-                      onStartPreset?.({
-                        title: room.title,
-                        url: room.url,
-                        category: 'Public Room',
-                        badge: room.roomCode,
-                      })
-                    }
-                    className="px-3 py-1 rounded-md bg-zinc-900 hover:bg-zinc-800 text-white font-medium text-xs border border-white/10 transition-colors cursor-pointer flex items-center gap-1.5"
-                  >
-                    <span>Connect</span>
-                    <ArrowRight className="w-3 h-3 text-[#e50914]" />
                   </button>
                 </div>
               </div>

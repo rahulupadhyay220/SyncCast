@@ -1,31 +1,17 @@
 {
-  "name": "youtube",
+  "name": "synccast",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
+  "description": "SyncCast - Real-time synchronized watch party platform with RBAC moderation and sub-second drift compensation",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "lint": "oxlint",
-    "preview": "vite preview"
-  },
-  "dependencies": {
-    "@clerk/react": "^6.17.7",
-    "canvas-confetti": "^1.9.4",
-    "lucide-react": "^1.53.0",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
-    "react-player": "^3.4.0",
-    "react-router-dom": "^7.18.4"
-  },
-  "devDependencies": {
-    "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.7",
-    "@vitejs/plugin-react": "^6.1.1",
-    "autoprefixer": "^10.6.1",
-    "oxlint": "^1.81.0",
-    "postcss": "^8.5.29",
-    "tailwindcss": "^3.4.19",
-    "vite": "^8.3.0"
+    "dev": "npm --prefix frontend run dev --",
+    "build": "npm --prefix frontend run build",
+    "lint": "npm --prefix frontend run lint",
+    "preview": "npm --prefix frontend run preview",
+    "server": "npm --prefix backend start",
+    "server:dev": "npm --prefix backend run dev",
+    "server:test": "npm --prefix backend test",
+    "test": "npm --prefix backend test"
   }
 }

@@ -1,5 +1,5 @@
 import React from 'react';
-import { UserMinus, ArrowUpCircle, ArrowDownCircle, Crown, UserPlus } from 'lucide-react';
+import { UserMinus, Ban, ArrowUpCircle, ArrowDownCircle, Crown, UserPlus } from 'lucide-react';
 import { getAvatarColor, getInitials } from '../utils/avatar';
 
 export function ParticipantList({
@@ -8,6 +8,8 @@ export function ParticipantList({
   onPromote,
   onDemote,
   onKick,
+  onRemove,
+  onBlock,
   onOpenShareModal,
 }) {
   return (
@@ -107,12 +109,26 @@ export function ParticipantList({
                       <ArrowDownCircle className="w-3.5 h-3.5" />
                     </button>
                   )}
+
+                  {/* Remove Participant from stream (Rule 2) */}
                   <button
-                    onClick={() => onKick?.(user.id)}
-                    className="p-1 rounded text-zinc-400 hover:text-white hover:bg-[#e50914] transition-colors cursor-pointer"
-                    title="Remove peer"
+                    onClick={() => {
+                      if (onRemove) onRemove(user.id, user.name);
+                      else onKick?.(user.id);
+                    }}
+                    className="p-1 rounded text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 border border-amber-500/20 transition-colors cursor-pointer"
+                    title="Remove participant from stream"
                   >
                     <UserMinus className="w-3.5 h-3.5" />
+                  </button>
+
+                  {/* Permanently Block Participant (Rule 5) */}
+                  <button
+                    onClick={() => onBlock?.(user.id, user.name)}
+                    className="p-1 rounded text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 transition-colors cursor-pointer"
+                    title="Permanently block participant"
+                  >
+                    <Ban className="w-3.5 h-3.5" />
                   </button>
                 </div>
               )}

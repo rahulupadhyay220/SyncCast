@@ -1,25 +1,164 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { LogIn, Key, Tv, ArrowRight, Radio } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { Key, Tv, ArrowRight, User, ShieldAlert, Clock, Lock } from 'lucide-react';
 import { FEATURED_MOVIES } from '../data/movies';
+import { getUserDisplayName } from '../utils/user';
+import { isParticipantBlocked, isParticipantRemoved } from '../utils/moderation';
 
-export function JoinPartyPage({ onJoinParty }) {
+export function JoinPartyPage({
+  onJoinParty,
+  sendRejoinRequest,
+  rejoinStatus,
+  setRejoinStatus,
+}) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { user, isLoaded, isSignedIn, effectiveSignedIn } = useAuth();
+  const signedInName = getUserDisplayName(user);
 
-  const [name, setName] = useState('Jordan Lee');
-  const [code, setCode] = useState('');
+  const [name, setName] = useState(signedInName || 'Guest');
+  const [code, setCode] = useState(() => searchParams.get('room')?.toUpperCase() || 'SYNC-7729');
   const [role, setRole] = useState('Participant');
+  const [waitingForHost, setWaitingForHost] = useState(false);
+  const [pendingRejoinData, setPendingRejoinData] = useState(null);
 
-  // Pre-fill room code from URL query parameter if present
-  useEffect(() => {
-    const roomFromUrl = searchParams.get('room');
-    if (roomFromUrl) {
-      setCode(roomFromUrl.toUpperCase());
-    } else if (!code) {
-      setCode('SYNC-7729');
+  const attemptJoin = React.useCallback((targetCode, targetName, targetRole) => {
+    const finalCode = (targetCode || '').trim().toUpperCase() || 'SYNC-7729';
+    const finalName = (targetName || '').trim() || signedInName || 'Guest';
+    // Rule: A user joining any stream through invitation code in enter code page cannot join as a host
+    const finalRole = targetRole === 'Host' || !targetRole ? 'Participant' : targetRole;
+
+    if (!effectiveSignedIn) {
+      sessionStorage.setItem(
+        'pendingJoin',
+        JSON.stringify({
+          name: finalName,
+          code: finalCode,
+          role: finalRole,
+        })
+      );
+      navigate(`/sign-in?redirect_url=/join?room=${finalCode}`);
+      return;
     }
-  }, [searchParams]);
+
+    // Rule 5 & 6: Blocked participants can never rejoin. Priority rule overrides all.
+    // Automatically deny and redirect to Home Page immediately without showing confirmation to host.
+    if (isParticipantBlocked(finalCode, null, finalName)) {
+      sessionStorage.setItem(
+        'streamEvictionNotice',
+        JSON.stringify({
+          action: 'block',
+          message: `You are permanently blocked from stream ${finalCode}. Access is completely denied.`,
+        })
+      );
+      navigate('/');
+      return;
+    }
+
+    // Rule 3: Removed participants require host confirmation
+    if (isParticipantRemoved(finalCode, null, finalName)) {
+      setWaitingForHost(true);
+      setPendingRejoinData({ code: finalCode, name: finalName, role: finalRole });
+      if (sendRejoinRequest) {
+        sendRejoinRequest({ code: finalCode, name: finalName });
+      }
+      return;
+    }
+
+    if (onJoinParty) {
+      const res = onJoinParty({
+        name: finalName,
+        code: finalCode,
+        role: finalRole,
+      });
+      if (res?.isBlocked) {
+        navigate('/');
+        return;
+      }
+      if (res?.isRemoved) {
+        setWaitingForHost(true);
+        setPendingRejoinData({ code: finalCode, name: finalName, role: finalRole });
+        if (sendRejoinRequest) {
+          sendRejoinRequest({ code: finalCode, name: finalName });
+        }
+        return;
+      }
+      if (res?.success) {
+        navigate('/room');
+      }
+    }
+  }, [signedInName, effectiveSignedIn, navigate, sendRejoinRequest, onJoinParty]);
+
+  // Pre-fill room code from URL query parameter if present during render
+  const roomFromUrl = searchParams.get('room');
+  const [prevRoomFromUrl, setPrevRoomFromUrl] = useState(roomFromUrl);
+  if (roomFromUrl && roomFromUrl !== prevRoomFromUrl) {
+    setPrevRoomFromUrl(roomFromUrl);
+    setCode(roomFromUrl.toUpperCase());
+  }
+
+  // Keep name synced if user signs in during render
+  const [prevSignedInName, setPrevSignedInName] = useState(signedInName);
+  if (signedInName && signedInName !== prevSignedInName) {
+    setPrevSignedInName(signedInName);
+    if (name === 'Guest') {
+      setName(signedInName);
+    }
+  }
+
+  // Handle Host's Rejoin Decision (Rule 4)
+  useEffect(() => {
+    if (!rejoinStatus || !pendingRejoinData) return;
+
+    if (rejoinStatus === 'approved') {
+      const data = pendingRejoinData;
+      setTimeout(() => {
+        setWaitingForHost(false);
+        setPendingRejoinData(null);
+        setRejoinStatus?.(null);
+        onJoinParty?.({
+          name: data.name,
+          code: data.code,
+          role: data.role || 'Participant',
+        });
+        navigate('/room');
+      }, 0);
+    } else if (rejoinStatus === 'rejected') {
+      setTimeout(() => {
+        setWaitingForHost(false);
+        setPendingRejoinData(null);
+        setRejoinStatus?.(null);
+        sessionStorage.setItem(
+          'streamEvictionNotice',
+          JSON.stringify({
+            action: 'rejected',
+            message: 'The host rejected your request to rejoin the stream.',
+          })
+        );
+        navigate('/');
+      }, 0);
+    }
+  }, [rejoinStatus, pendingRejoinData, onJoinParty, navigate, setRejoinStatus]);
+
+  // Automatically resume pending join if returning after login
+  useEffect(() => {
+    if (isLoaded && isSignedIn) {
+      const pendingJoinStr = sessionStorage.getItem('pendingJoin');
+      if (pendingJoinStr) {
+        sessionStorage.removeItem('pendingJoin');
+        try {
+          const { name: pName, code: pCode, role: pRole } = JSON.parse(pendingJoinStr);
+          const finalJoinName = signedInName || pName || 'Guest';
+          setTimeout(() => {
+            attemptJoin(pCode || 'SYNC-7729', finalJoinName, pRole || 'Participant');
+          }, 0);
+        } catch {
+          // ignore error
+        }
+      }
+    }
+  }, [isLoaded, isSignedIn, signedInName, attemptJoin]);
 
   const activePublicRooms = [
     {
@@ -47,28 +186,12 @@ export function JoinPartyPage({ onJoinParty }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    const finalCode = code.trim().toUpperCase() || 'SYNC-7729';
-
-    if (onJoinParty) {
-      onJoinParty({
-        name: name.trim() || 'Jordan Lee',
-        code: finalCode,
-        role,
-      });
-    }
-    navigate('/room');
+    attemptJoin(code, name, role);
   };
 
   const handleJoinPreset = (presetRoom) => {
     setCode(presetRoom.code);
-    if (onJoinParty) {
-      onJoinParty({
-        name: name.trim() || 'Jordan Lee',
-        code: presetRoom.code,
-        role,
-      });
-    }
-    navigate('/room');
+    attemptJoin(presetRoom.code, name, role);
   };
 
   return (
@@ -95,14 +218,22 @@ export function JoinPartyPage({ onJoinParty }) {
           >
             {/* Display Name Input */}
             <div className="space-y-1.5">
-              <label className="block text-xs font-mono uppercase tracking-wider text-zinc-400">
-                Display Name
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-mono uppercase tracking-wider text-zinc-400">
+                  Display Name
+                </label>
+                {isSignedIn && signedInName && (
+                  <span className="text-[11px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 flex items-center gap-1">
+                    <User className="w-3 h-3" />
+                    <span>Signed in as {signedInName}</span>
+                  </span>
+                )}
+              </div>
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Jordan Lee"
+                placeholder={signedInName || 'e.g. Jordan Lee'}
                 required
                 className="w-full px-4 py-2.5 rounded-lg bg-zinc-900/60 border border-white/10 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#e50914] transition-colors"
               />
@@ -126,18 +257,20 @@ export function JoinPartyPage({ onJoinParty }) {
               </div>
             </div>
 
-            {/* Role Simulation Selector */}
+            {/* Role Simulation Selector - Restricted to Audience/Joiner roles (Host is Creator Only) */}
             <div className="space-y-2">
               <div className="flex items-center justify-between text-xs">
                 <span className="font-mono uppercase tracking-wider text-zinc-400">Perspective</span>
-                <span className="text-[11px] text-zinc-500 font-mono">Demo permissions</span>
+                <span className="text-[11px] text-zinc-500 font-mono flex items-center gap-1">
+                  <Lock className="w-3 h-3 text-zinc-500" />
+                  <span>Host is creator only</span>
+                </span>
               </div>
 
-              <div className="grid grid-cols-3 gap-1.5 p-1 bg-zinc-900/70 rounded-lg border border-white/10">
+              <div className="grid grid-cols-2 gap-1.5 p-1 bg-zinc-900/70 rounded-lg border border-white/10">
                 {[
                   { id: 'Participant', label: 'Guest', sub: 'View & Chat' },
-                  { id: 'Moderator', label: 'Moderator', sub: 'Play & Seek' },
-                  { id: 'Host', label: 'Host', sub: 'Full Admin' },
+                  { id: 'Moderator', label: 'Moderator', sub: 'Chat & React' },
                 ].map((item) => (
                   <button
                     type="button"
@@ -156,6 +289,14 @@ export function JoinPartyPage({ onJoinParty }) {
               </div>
             </div>
 
+            {/* Unauthenticated notice */}
+            {isLoaded && !isSignedIn && (
+              <div className="flex items-center gap-2 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs">
+                <ShieldAlert className="w-4 h-4 shrink-0 text-amber-400" />
+                <span>You will be redirected to sign in/up to enter and participate in the room.</span>
+              </div>
+            )}
+
             {/* Connect Button */}
             <div className="pt-2">
               <button
@@ -163,7 +304,7 @@ export function JoinPartyPage({ onJoinParty }) {
                 className="w-full py-3 px-5 rounded-lg font-semibold text-xs sm:text-sm bg-[#e50914] text-white hover:bg-[#c90812] active:bg-[#a5070f] transition-colors cursor-pointer flex items-center justify-center gap-2 shadow-sm"
               >
                 <Tv className="w-4 h-4" />
-                <span>Connect to Theater</span>
+                <span>{isLoaded && !isSignedIn ? 'Sign In & Connect to Theater' : 'Connect to Theater'}</span>
                 <ArrowRight className="w-4 h-4 ml-0.5" />
               </button>
             </div>
@@ -187,6 +328,8 @@ export function JoinPartyPage({ onJoinParty }) {
               {activePublicRooms.map((room) => (
                 <div
                   key={room.code}
+                  id={`public-room-${room.code}`}
+                  data-testid="public-room-card"
                   onClick={() => handleJoinPreset(room)}
                   className="p-3 rounded-lg bg-zinc-900/40 hover:bg-zinc-900 border border-white/[0.07] hover:border-white/20 cursor-pointer transition-colors flex items-center gap-3 group"
                 >
@@ -214,6 +357,40 @@ export function JoinPartyPage({ onJoinParty }) {
           </div>
         </div>
       </div>
+
+      {/* Waiting for Host Rejoin Approval Modal (Rule 3) */}
+      {waitingForHost && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fadeIn">
+          <div className="max-w-md w-full bg-[#090b10] border border-white/15 rounded-2xl p-6 sm:p-7 shadow-2xl space-y-5 text-center animate-scaleIn">
+            <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/25 text-amber-400 mx-auto flex items-center justify-center animate-pulse">
+              <Clock className="w-6 h-6" />
+            </div>
+            <div className="space-y-1.5">
+              <h3 className="text-lg font-bold text-white">Rejoin Request Sent</h3>
+              <p className="text-xs text-zinc-300 leading-relaxed">
+                You were previously removed from stream{' '}
+                <strong className="text-white font-mono">{pendingRejoinData?.code}</strong>.
+                A confirmation popup has been sent to the host's screen.
+              </p>
+            </div>
+            <div className="flex items-center justify-center gap-2 text-xs font-mono text-zinc-400 bg-zinc-900/60 p-2.5 rounded-lg border border-white/5">
+              <div className="w-3.5 h-3.5 border-2 border-[#e50914] border-t-transparent rounded-full animate-spin" />
+              <span>Waiting for host decision...</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setWaitingForHost(false);
+                setPendingRejoinData(null);
+                navigate('/');
+              }}
+              className="w-full py-2.5 px-4 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-300 hover:text-white font-semibold text-xs transition-colors cursor-pointer"
+            >
+              Cancel & Return Home
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

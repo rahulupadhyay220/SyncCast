@@ -1,22 +1,63 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Info, ThumbsUp, Heart, Sparkles, Flag, Volume2 } from 'lucide-react';
+import {
+  Send,
+  ThumbsUp,
+  Heart,
+  Users,
+  UserMinus,
+  Ban,
+} from 'lucide-react';
 import { getAvatarColor, getInitials } from '../utils/avatar';
 
-const QUICK_SIGNALS = [
-  { id: 'like', label: 'Like', icon: ThumbsUp },
-  { id: 'heart', label: 'Love', icon: Heart },
-  { id: 'clap', label: 'Applause', icon: Sparkles },
-  { id: 'audio', label: 'Audio OK', icon: Volume2 },
-  { id: 'flag', label: 'Issue', icon: Flag },
-];
-
-export function PartyChat({ messages = [], onSendMessage, onTriggerReaction }) {
+export function PartyChat({
+  messages = [],
+  onSendMessage,
+  onTriggerReaction,
+  reactionCounts = { Like: 0, Love: 0 },
+  participantCount = 1,
+  participants = [],
+  userName = '',
+  simulatedRole = 'Host',
+  onRemoveParticipant,
+  onBlockParticipant,
+}) {
   const [text, setText] = useState('');
-  const chatEndRef = useRef(null);
+  const [userClicks, setUserClicks] = useState({ Like: 0, Love: 0 });
+  const chatMessagesRef = useRef(null);
+  const isFirstChatRender = useRef(true);
+
+  const displayLikes = (reactionCounts?.Like || 0) + userClicks.Like;
+  const displayLoves = (reactionCounts?.Love || 0) + userClicks.Love;
+
+  const handleReactionClick = (type) => {
+    setUserClicks((prev) => ({
+      ...prev,
+      [type]: (prev[type] || 0) + 1,
+    }));
+    const reactionLabel = type === 'Like' ? '👍 Like' : '❤️ Love';
+    onTriggerReaction?.(reactionLabel);
+  };
+
+  // Only show real user chat messages (filter out any host/system action logs)
+  const chatMessages = messages.filter(
+    (msg) => msg.type === 'chat' || (!msg.type && msg.text && msg.sender)
+  );
+
+  // Use actual participants length if available, or participantCount
+  const liveViewerCount = Math.max(1, participants.length || participantCount || 1);
+
+  const latestMessageId = chatMessages[chatMessages.length - 1]?.id;
 
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    const messageList = chatMessagesRef.current;
+    if (!messageList) return;
+
+    const distanceFromBottom = messageList.scrollHeight - messageList.scrollTop - messageList.clientHeight;
+    if (isFirstChatRender.current || distanceFromBottom <= 80) {
+      messageList.scrollTop = messageList.scrollHeight;
+    }
+    isFirstChatRender.current = false;
+  }, [latestMessageId]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -26,46 +67,46 @@ export function PartyChat({ messages = [], onSendMessage, onTriggerReaction }) {
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#090b10] rounded-xl border border-white/[0.08] overflow-hidden text-white">
-      {/* Chat Header */}
-      <div className="p-3 border-b border-white/[0.06] flex items-center justify-between bg-zinc-900/40">
+    <div className="flex flex-col h-full bg-[#090b10] rounded-xl border border-white/[0.08] overflow-hidden text-white shadow-2xl">
+      {/* 1. Chat Header with Real Stream Viewer Count */}
+      <div className="p-3 border-b border-white/[0.06] flex items-center justify-between bg-zinc-900/50">
         <div className="flex items-center gap-2">
-          <span className="w-1.5 h-1.5 rounded-sm bg-emerald-400" />
-          <h3 className="font-mono text-xs uppercase tracking-wider text-zinc-300 font-semibold">
-            Room Log
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+          </span>
+          <h3 className="font-mono text-xs uppercase tracking-wider text-zinc-200 font-bold flex items-center gap-1.5">
+            <span>Room Chat</span>
           </h3>
         </div>
-        <span className="text-[11px] font-mono text-zinc-500">
-          {messages.length} msgs
-        </span>
+
+        {/* Live People in Stream Badge (Real Count) */}
+        <div className="flex items-center gap-2">
+          <div
+            className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 font-mono text-[11px] font-semibold transition-all shadow-xs"
+            title={`${liveViewerCount} ${liveViewerCount === 1 ? 'person' : 'people'} currently in this stream`}
+          >
+            <Users className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+            <span>
+              {liveViewerCount} {liveViewerCount === 1 ? 'person in stream' : 'people in stream'}
+            </span>
+          </div>
+        </div>
       </div>
 
-      {/* Message List */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-2.5 min-h-[280px] max-h-[460px]">
-        {messages.length === 0 ? (
-          <div className="text-center py-12 text-zinc-500 text-xs font-mono">
-            No session messages. Send a message to the room.
+      {/* 2. Chat Messages List - Only host & participant text messages */}
+      <div ref={chatMessagesRef} className="flex-1 overflow-y-auto p-3 space-y-2.5 min-h-[300px] max-h-[500px]">
+        {chatMessages.length === 0 ? (
+          <div className="text-center py-16 text-zinc-500 text-xs font-mono">
+            No messages yet. Send a message to the room!
           </div>
         ) : (
-          messages.map((msg) => {
-            if (msg.type === 'system') {
-              return (
-                <div
-                  key={msg.id}
-                  className="flex items-center justify-center gap-1.5 py-1 px-2.5 rounded-md bg-zinc-900/60 border border-white/[0.05] text-[11px] text-zinc-400 font-mono"
-                >
-                  <Info className="w-3 h-3 text-zinc-500 shrink-0" />
-                  <span>{msg.text}</span>
-                  <span className="text-[10px] text-zinc-600 ml-1">({msg.timestamp})</span>
-                </div>
-              );
-            }
-
+          chatMessages.map((msg) => {
             const isHost = msg.role === 'Host';
             const isMod = msg.role === 'Moderator';
 
             return (
-              <div key={msg.id} className="flex items-start gap-2 text-xs">
+              <div key={msg.id} className="flex items-start gap-2 text-xs animate-fadeIn">
                 <div
                   className={`w-6 h-6 rounded-md flex items-center justify-center font-bold text-[9px] shrink-0 text-white font-mono ${
                     msg.avatarColor || getAvatarColor(msg.sender)
@@ -91,7 +132,39 @@ export function PartyChat({ messages = [], onSendMessage, onTriggerReaction }) {
                         </span>
                       )}
                     </div>
-                    <span className="text-[10px] text-zinc-500 font-mono shrink-0">{msg.timestamp}</span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="text-[10px] text-zinc-500 font-mono">
+                        {msg.timestamp}
+                      </span>
+                      {simulatedRole === 'Host' && !isHost && msg.sender !== userName && !msg.sender.includes('(You)') && (
+                        <div className="flex items-center gap-0.5 ml-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const found = participants.find((p) => p.name === msg.sender || p.name.includes(msg.sender));
+                              const targetId = found?.id || `user-${msg.sender.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
+                              onRemoveParticipant?.(targetId, msg.sender);
+                            }}
+                            className="p-0.5 rounded text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 transition-colors cursor-pointer"
+                            title={`Remove ${msg.sender} from stream & chat`}
+                          >
+                            <UserMinus className="w-3 h-3" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const found = participants.find((p) => p.name === msg.sender || p.name.includes(msg.sender));
+                              const targetId = found?.id || `user-${msg.sender.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
+                              onBlockParticipant?.(targetId, msg.sender);
+                            }}
+                            className="p-0.5 rounded text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors cursor-pointer"
+                            title={`Permanently block ${msg.sender}`}
+                          >
+                            <Ban className="w-3 h-3" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                   <p className="text-zinc-300 font-normal break-words leading-relaxed text-xs">
                     {msg.text}
@@ -101,34 +174,42 @@ export function PartyChat({ messages = [], onSendMessage, onTriggerReaction }) {
             );
           })
         )}
-        <div ref={chatEndRef} />
       </div>
 
-      {/* Signal Action Bar (No Emojis) */}
-      <div className="px-3 py-1.5 border-t border-white/[0.06] bg-[#07080c] flex items-center justify-between gap-1">
-        <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider shrink-0">
-          Signals:
-        </span>
-        <div className="flex items-center gap-1">
-          {QUICK_SIGNALS.map((sig) => {
-            const Icon = sig.icon;
-            return (
-              <button
-                key={sig.id}
-                type="button"
-                onClick={() => onTriggerReaction?.(sig.label)}
-                className="px-2 py-1 rounded-md bg-zinc-900/60 hover:bg-zinc-800 border border-white/[0.06] hover:border-white/20 text-zinc-400 hover:text-white transition-colors flex items-center gap-1 text-[10px] font-mono cursor-pointer"
-                title={`Send ${sig.label} signal`}
-              >
-                <Icon className="w-3 h-3 text-[#e50914]" />
-                <span className="hidden sm:inline">{sig.label}</span>
-              </button>
-            );
-          })}
-        </div>
+      {/* 3. Reaction Actions Bar - Only Like and Love with live count badges */}
+      <div className="px-3 py-2 border-t border-white/[0.06] bg-[#07080c] flex items-center gap-2">
+        {/* Like Button */}
+        <button
+          type="button"
+          onClick={() => handleReactionClick('Like')}
+          className="px-2.5 py-1.5 rounded-lg bg-zinc-900/80 hover:bg-zinc-800 border border-white/[0.08] hover:border-blue-500/30 text-zinc-300 hover:text-white transition-all flex items-center gap-1.5 text-xs font-mono cursor-pointer active:scale-95 group shadow-xs"
+          title="Like"
+          aria-label="Like"
+        >
+          <ThumbsUp className="w-3.5 h-3.5 text-blue-400 group-hover:scale-110 transition-transform" />
+          <span className="font-medium">Like</span>
+          <span className="ml-0.5 px-1.5 py-0.2 rounded-full bg-blue-500/15 border border-blue-500/30 text-blue-300 text-[11px] font-bold">
+            {displayLikes}
+          </span>
+        </button>
+
+        {/* Love Button */}
+        <button
+          type="button"
+          onClick={() => handleReactionClick('Love')}
+          className="px-2.5 py-1.5 rounded-lg bg-zinc-900/80 hover:bg-zinc-800 border border-white/[0.08] hover:border-rose-500/30 text-zinc-300 hover:text-white transition-all flex items-center gap-1.5 text-xs font-mono cursor-pointer active:scale-95 group shadow-xs"
+          title="Love"
+          aria-label="Love"
+        >
+          <Heart className="w-3.5 h-3.5 text-rose-500 fill-rose-500/30 group-hover:scale-110 transition-transform" />
+          <span className="font-medium">Love</span>
+          <span className="ml-0.5 px-1.5 py-0.2 rounded-full bg-rose-500/15 border border-rose-500/30 text-rose-300 text-[11px] font-bold">
+            {displayLoves}
+          </span>
+        </button>
       </div>
 
-      {/* Input Bar */}
+      {/* 4. Chat Input Bar */}
       <form onSubmit={handleSubmit} className="p-2.5 border-t border-white/[0.06] bg-[#07080c] flex items-center gap-2">
         <input
           type="text"

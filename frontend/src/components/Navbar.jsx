@@ -1,17 +1,21 @@
 import React, { useState } from 'react';
-import { Plus, LogIn, Copy, Check, LayoutDashboard, Tv, Menu, X, UserPlus } from 'lucide-react';
+import { Plus, LogIn, LogOut, Copy, Check, LayoutDashboard, Tv, Menu, X, UserPlus } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { UserMenu } from './UserMenu';
 import { Logo } from './Logo';
 
 export function Navbar({
   isInRoom,
   roomCode,
   simulatedRole,
+  isRoomCreator = false,
   onSwitchRole,
   onLeaveRoom,
 }) {
   const [copied, setCopied] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { isLoaded, isSignedIn } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -38,14 +42,12 @@ export function Navbar({
   const navLinks = [
     { label: 'Movies', path: '/movies' },
     { label: 'TV Shows', path: '/shows' },
-    { label: 'Top Rated', path: '/top-rated' },
-    { label: 'How It Works', path: '/how-it-works' },
     { label: 'FAQ', path: '/faq' },
   ];
 
   return (
     <header className="sticky top-0 z-50 w-full bg-[#050608]/85 backdrop-blur-md border-b border-white/[0.07] select-none transition-all">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between gap-4">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-14 flex items-center justify-between gap-2 sm:gap-4">
         {/* SyncCast Brand Logo */}
         <Link
           to="/"
@@ -54,33 +56,39 @@ export function Navbar({
           title="SyncCast - Synchronized YouTube Cinema"
           id="main-logo"
         >
-          <Logo size="md" />
+          <div className="scale-90 sm:scale-100 origin-left">
+            <Logo size="md" />
+          </div>
         </Link>
 
         {/* Center Navigation Links */}
         {isInRoom ? (
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-3">
             {/* View Switcher: Theater vs Dashboard */}
             <div className="flex items-center bg-zinc-900/80 p-0.5 rounded-lg border border-white/10 text-xs">
               <Link
                 to="/room"
-                className={`px-3 py-1 rounded-md font-medium text-xs transition-colors flex items-center gap-1.5 ${isActive('/room')
+                title="Theater"
+                aria-label="Theater"
+                className={`px-2.5 sm:px-3 py-1 rounded-md font-medium text-xs transition-colors flex items-center gap-1.5 ${isActive('/room')
                   ? 'bg-zinc-800 text-white shadow-xs font-semibold'
                   : 'text-zinc-400 hover:text-zinc-200'
                   }`}
               >
                 <Tv className="w-3.5 h-3.5" />
-                <span>Theater</span>
+                <span className="hidden sm:inline">Theater</span>
               </Link>
               <Link
                 to="/dashboard"
-                className={`px-3 py-1 rounded-md font-medium text-xs transition-colors flex items-center gap-1.5 ${isActive('/dashboard')
+                title="Dashboard"
+                aria-label="Dashboard"
+                className={`px-2.5 sm:px-3 py-1 rounded-md font-medium text-xs transition-colors flex items-center gap-1.5 ${isActive('/dashboard')
                   ? 'bg-zinc-800 text-white shadow-xs font-semibold'
                   : 'text-zinc-400 hover:text-zinc-200'
                   }`}
               >
                 <LayoutDashboard className="w-3.5 h-3.5" />
-                <span>Dashboard</span>
+                <span className="hidden sm:inline">Dashboard</span>
               </Link>
             </div>
 
@@ -101,7 +109,7 @@ export function Navbar({
             {/* Role Switcher Pill */}
             <div className="hidden md:flex items-center bg-zinc-900/60 p-0.5 rounded-lg border border-white/10 text-xs">
               <span className="px-2 text-[10px] font-mono uppercase tracking-wider text-zinc-500">Role</span>
-              {['Host', 'Moderator', 'Participant'].map((role) => (
+              {(isRoomCreator ? ['Host', 'Moderator', 'Participant'] : ['Moderator', 'Participant']).map((role) => (
                 <button
                   key={role}
                   onClick={() => onSwitchRole?.(role)}
@@ -144,13 +152,16 @@ export function Navbar({
         )}
 
         {/* Right Actions */}
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           {isInRoom ? (
             <button
               onClick={onLeaveRoom}
-              className="px-3.5 py-1.5 text-xs font-medium text-zinc-300 hover:text-white bg-zinc-900/80 hover:bg-zinc-800 border border-white/10 hover:border-white/20 rounded-lg transition-colors cursor-pointer"
+              title="Leave Room"
+              aria-label="Leave Room"
+              className="p-2 sm:px-3 sm:py-1.5 text-xs font-medium text-zinc-300 hover:text-red-400 bg-zinc-900/80 hover:bg-zinc-800 border border-white/10 hover:border-red-500/30 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5"
             >
-              Leave Room
+              <LogOut className="w-3.5 h-3.5 text-red-400" />
+              <span className="hidden sm:inline">Leave Room</span>
             </button>
           ) : (
             <>
@@ -167,19 +178,27 @@ export function Navbar({
 
               <Link
                 to="/host"
-                className="px-4 py-1.5 text-xs font-semibold text-white bg-[#e50914] hover:bg-[#c90812] active:bg-[#a5070f] rounded-lg transition-colors flex items-center gap-1.5"
+                className="px-3 sm:px-4 py-1.5 text-xs font-semibold text-white bg-[#e50914] hover:bg-[#c90812] active:bg-[#a5070f] rounded-lg transition-colors flex items-center gap-1.5"
               >
                 <Plus className="w-3.5 h-3.5" />
-                <span>Host Room</span>
+                <span className="hidden xs:inline">Host Room</span>
+                <span className="xs:hidden">Host</span>
               </Link>
 
-              <button
-                type="button"
-                className="px-3.5 py-1.5 text-xs font-medium text-zinc-200 hover:text-white bg-zinc-900/60 hover:bg-zinc-800 border border-white/10 hover:border-white/20 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
-              >
-                <UserPlus className="w-3.5 h-3.5 text-zinc-400" />
-                <span>Sign Up</span>
-              </button>
+              {isLoaded && !isSignedIn && (
+                <Link
+                  to="/signup"
+                  id="navbar-signup-button"
+                  className="px-3 sm:px-3.5 py-1.5 text-xs font-semibold text-white bg-zinc-900/90 hover:bg-zinc-800 border border-white/15 hover:border-red-500/50 rounded-lg transition-all flex items-center gap-1.5 shadow-sm group hover:shadow-red-950/30 cursor-pointer"
+                  title="Create your SyncCast account"
+                >
+                  <UserPlus className="w-3.5 h-3.5 text-red-500 group-hover:scale-110 transition-transform" />
+                  <span>Sign Up</span>
+                </Link>
+              )}
+              {isLoaded && isSignedIn && (
+                <UserMenu />
+              )}
 
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -229,7 +248,7 @@ export function Navbar({
             </Link>
           </div>
 
-          <div className="pt-3 border-t border-white/[0.07] grid grid-cols-3 gap-2 text-xs">
+          <div className="pt-3 border-t border-white/[0.07] grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
             <Link
               to="/join"
               onClick={closeMobile}
@@ -244,13 +263,22 @@ export function Navbar({
             >
               Host Room
             </Link>
-            <button
-              type="button"
-              className="py-2 text-center font-semibold text-zinc-200 bg-zinc-900 border border-white/10 rounded-lg hover:text-white cursor-pointer flex items-center justify-center gap-1"
-            >
-              <UserPlus className="w-3.5 h-3.5 text-zinc-400" />
-              <span>Sign Up</span>
-            </button>
+            {isLoaded && !isSignedIn && (
+              <Link
+                to="/signup"
+                onClick={closeMobile}
+                id="mobile-navbar-signup-button"
+                className="py-2 text-center font-semibold text-zinc-100 bg-zinc-900/90 border border-red-500/40 rounded-lg hover:bg-zinc-800 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <UserPlus className="w-3.5 h-3.5 text-red-500" />
+                <span>Sign Up</span>
+              </Link>
+            )}
+            {isLoaded && isSignedIn && (
+              <div className="flex items-center justify-center">
+                <UserMenu />
+              </div>
+            )}
           </div>
         </div>
       )}

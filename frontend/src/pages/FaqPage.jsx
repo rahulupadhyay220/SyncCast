@@ -67,13 +67,13 @@ export function FaqPage() {
   });
 
   return (
-    <div className="min-h-screen bg-[#050608] text-zinc-100 py-12 px-4 sm:px-6 lg:px-8 space-y-10 animate-fadeIn select-none">
+    <div className="min-h-screen bg-[#050608] text-zinc-100 py-8 sm:py-12 px-3 sm:px-6 lg:px-8 space-y-6 sm:space-y-10 animate-fadeIn select-none">
       {/* Page Header */}
       <div className="max-w-3xl mx-auto space-y-3 text-center">
         <span className="text-[11px] font-mono uppercase tracking-widest text-zinc-500 font-semibold">
           Support & FAQ
         </span>
-        <h1 className="text-3xl sm:text-4xl font-black text-white tracking-tight">
+        <h1 className="text-2xl sm:text-4xl font-black text-white tracking-tight">
           Frequently Asked Questions
         </h1>
         <p className="text-xs sm:text-sm text-zinc-400 font-normal max-w-lg mx-auto">

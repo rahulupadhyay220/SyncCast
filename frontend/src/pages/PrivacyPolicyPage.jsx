@@ -8,8 +8,8 @@ export function PrivacyPolicyPage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-[#050608] text-zinc-300 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-4xl mx-auto space-y-8">
+    <div className="min-h-screen bg-[#050608] text-zinc-300 py-8 sm:py-12 px-3 sm:px-6 lg:px-8">
+      <div className="max-w-4xl mx-auto space-y-6 sm:space-y-8">
         
         {/* Navigation & Header */}
         <div className="space-y-3 pb-6 border-b border-white/[0.08]">
@@ -26,7 +26,7 @@ export function PrivacyPolicyPage() {
             <span>•</span>
             <span>Effective October 2026</span>
           </div>
-          <h1 className="text-3xl sm:text-4xl font-bold text-white tracking-tight">
+          <h1 className="text-2xl sm:text-4xl font-bold text-white tracking-tight">
             Privacy Policy
           </h1>
           <p className="text-sm text-zinc-400 leading-relaxed max-w-2xl">
@@ -35,9 +35,9 @@ export function PrivacyPolicyPage() {
         </div>
 
         {/* Content Sections */}
-        <div className="space-y-8 text-sm leading-relaxed text-zinc-300">
+        <div className="space-y-6 sm:space-y-8 text-sm leading-relaxed text-zinc-300">
           
-          <section className="space-y-3 p-6 rounded-xl bg-[#090b10] border border-white/[0.07]">
+          <section className="space-y-3 p-4 sm:p-6 rounded-xl bg-[#090b10] border border-white/[0.07]">
             <h2 className="text-lg font-semibold text-white flex items-center gap-2">
               <Eye className="w-4 h-4 text-[#e50914]" />
               1. Information We Do Not Collect

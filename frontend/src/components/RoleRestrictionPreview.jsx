@@ -3,12 +3,13 @@ import { Check, X, Shield, Info } from 'lucide-react';
 
 export function RoleRestrictionPreview({
   simulatedRole,
+  isRoomCreator = false,
   onSwitchRole,
 }) {
   const permissions = [
-    { name: 'Play / Pause Stream', id: 'PLAY_PAUSE', host: true, mod: true, part: false },
-    { name: 'Timeline Scrub & Seek', id: 'SCRUB_SEEK', host: true, mod: true, part: false },
-    { name: 'Change Video Source / URL', id: 'CHANGE_URL', host: true, mod: true, part: false },
+    { name: 'Play / Pause Stream', id: 'PLAY_PAUSE', host: true, mod: false, part: false },
+    { name: 'Timeline Scrub & Seek', id: 'SCRUB_SEEK', host: true, mod: false, part: false },
+    { name: 'Change Video Source / URL', id: 'CHANGE_URL', host: true, mod: false, part: false },
     { name: 'Promote / Demote Roster', id: 'MANAGE_ROLES', host: true, mod: false, part: false },
     { name: 'Kick / Evict Viewers', id: 'EVICT_USERS', host: true, mod: false, part: false },
     { name: 'Live Chat & Reactions', id: 'CHAT_REACTIONS', host: true, mod: true, part: true },
@@ -31,15 +32,15 @@ export function RoleRestrictionPreview({
         </div>
 
         {/* Minimal Segmented Switcher */}
-        <div className="inline-flex p-0.5 rounded-lg bg-zinc-900/80 border border-white/[0.08]">
-          {['Host', 'Moderator', 'Participant'].map((role) => {
+        <div className="w-full sm:w-auto grid grid-cols-2 sm:inline-flex p-0.5 rounded-lg bg-zinc-900/80 border border-white/[0.08]">
+          {(isRoomCreator ? ['Host', 'Moderator', 'Participant'] : ['Moderator', 'Participant']).map((role) => {
             const isActive = simulatedRole === role;
             return (
               <button
                 key={role}
                 type="button"
                 onClick={() => onSwitchRole?.(role)}
-                className={`px-2.5 py-1 rounded-md text-[11px] font-mono tracking-tight transition-all cursor-pointer ${
+                className={`text-center py-1.5 sm:py-1 px-1 sm:px-2.5 rounded-md text-[10px] sm:text-[11px] font-mono tracking-tight transition-all cursor-pointer ${
                   isActive
                     ? 'bg-zinc-100 text-zinc-950 font-medium shadow-xs'
                     : 'text-zinc-400 hover:text-white hover:bg-white/[0.04]'

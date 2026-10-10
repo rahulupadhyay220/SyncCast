@@ -1,21 +1,34 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { HeroSection } from '../components/landing/HeroSection';
 import { FeaturesSection } from '../components/landing/FeaturesSection';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Film,
   Tv,
-  Award,
   Cpu,
-  Workflow,
   BookOpen,
   LayoutDashboard,
   Radio,
   ArrowRight,
+  AlertTriangle,
+  X,
 } from 'lucide-react';
 
-export function HomePage({ onStartParty, onJoinParty, onSelectPreset }) {
+export function HomePage({ onSelectPreset }) {
   const navigate = useNavigate();
+  const [evictionNotice, setEvictionNotice] = useState(() => {
+    if (typeof window === 'undefined') return null;
+    const notice = sessionStorage.getItem('streamEvictionNotice');
+    if (notice) {
+      sessionStorage.removeItem('streamEvictionNotice');
+      try {
+        return JSON.parse(notice);
+      } catch {
+        return { message: notice };
+      }
+    }
+    return null;
+  });
 
   useEffect(() => {
     if (window.location.hash === '#features') {
@@ -66,28 +79,12 @@ export function HomePage({ onStartParty, onJoinParty, onSelectPreset }) {
       image: 'https://images.unsplash.com/photo-1593784991095-a205069470b6?auto=format&fit=crop&w=800&q=80',
     },
     {
-      title: 'Top Rated',
-      desc: 'Curated leaderboard of community-ranked titles streaming with frame-locked precision.',
-      route: '/top-rated',
-      icon: Award,
-      badge: '8.5+ IMDb',
-      image: 'https://images.unsplash.com/photo-1517604931442-7e0c8ed2963c?auto=format&fit=crop&w=800&q=80',
-    },
-    {
       title: 'Sync Engine',
       desc: 'Explore sub-25ms WebSocket latency architecture and deterministic drift lock.',
       route: '#features',
       icon: Cpu,
       badge: 'Engine',
       image: 'https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&w=800&q=80',
-    },
-    {
-      title: 'How It Works',
-      desc: 'Workflow overview: zero extensions, zero accounts, instant link and room code sharing.',
-      route: '/how-it-works',
-      icon: Workflow,
-      badge: 'Workflow',
-      image: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=800&q=80',
     },
     {
       title: 'Knowledge Base',
@@ -99,7 +96,7 @@ export function HomePage({ onStartParty, onJoinParty, onSelectPreset }) {
     },
     {
       title: 'Control Center',
-      desc: 'Manage room controls, playback timeline, public theaters, and live attendee rosters.',
+      desc: 'Manage room controls, playback timeline, synchronized streaming, and live attendee rosters.',
       route: '/dashboard',
       icon: LayoutDashboard,
       badge: 'Dashboard',
@@ -117,6 +114,30 @@ export function HomePage({ onStartParty, onJoinParty, onSelectPreset }) {
 
   return (
     <div className="space-y-16 pb-20 select-none">
+      {/* Eviction / Removal / Block Alert Notice */}
+      {evictionNotice && (
+        <div className="max-w-5xl mx-auto px-4 pt-6 animate-fadeIn">
+          <div className="p-4 rounded-xl bg-red-950/60 border border-red-500/30 text-white flex items-center justify-between gap-4 shadow-xl backdrop-blur-md">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-red-500/20 border border-red-500/30 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5 text-red-400" />
+              </div>
+              <div>
+                <p className="font-bold text-sm text-white">Stream Session Notice</p>
+                <p className="text-xs text-red-200 mt-0.5">{evictionNotice.message || 'You have been redirected from the stream session.'}</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setEvictionNotice(null)}
+              className="p-1 rounded-md text-zinc-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer shrink-0"
+              title="Dismiss"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* 1. Cinematic Spotlight Hero */}
       <HeroSection
         onStartParty={() => navigate('/host')}
@@ -125,7 +146,7 @@ export function HomePage({ onStartParty, onJoinParty, onSelectPreset }) {
       />
 
       {/* 2. Directory Hub */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+      <section className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-white/[0.07] pb-4">
           <div className="space-y-1">
             <span className="text-[11px] font-mono uppercase tracking-widest text-zinc-500 font-semibold">
@@ -156,7 +177,7 @@ export function HomePage({ onStartParty, onJoinParty, onSelectPreset }) {
         </div>
 
         {/* Section Cards Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           {sectionsPortal.map((sec, idx) => {
             const Icon = sec.icon;
             return (
@@ -214,7 +235,7 @@ export function HomePage({ onStartParty, onJoinParty, onSelectPreset }) {
       </section>
 
       {/* 3. Engineered for Flawless Shared Viewing Section */}
-      <FeaturesSection onExplore={() => navigate('/host')} />
+      <FeaturesSection />
     </div>
   );
 }

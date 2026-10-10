@@ -12,7 +12,7 @@ export function TvShowsPage({ onSelectPreset }) {
   ];
 
   return (
-    <div className="min-h-screen bg-[#050608] text-zinc-100 py-10 px-4 sm:px-6 lg:px-8 space-y-8 animate-fadeIn select-none">
+    <div className="min-h-screen bg-[#050608] text-zinc-100 py-8 sm:py-10 px-3 sm:px-6 lg:px-8 space-y-6 sm:space-y-8 animate-fadeIn select-none">
       {/* Header Banner */}
       <div className="max-w-7xl mx-auto space-y-2 pb-4 border-b border-white/[0.07]">
         <span className="text-[11px] font-mono uppercase tracking-widest text-zinc-500 font-semibold">
@@ -28,7 +28,7 @@ export function TvShowsPage({ onSelectPreset }) {
 
       {/* Featured Spotlight Card */}
       <div className="max-w-7xl mx-auto">
-        <div className="p-6 sm:p-8 rounded-xl bg-[#090b10] border border-white/[0.08] flex flex-col md:flex-row items-center justify-between gap-6">
+        <div className="p-4 sm:p-8 rounded-xl bg-[#090b10] border border-white/[0.08] flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="space-y-3 max-w-xl">
             <span className="px-2 py-0.5 rounded bg-[#e50914] text-white text-[10px] font-mono uppercase tracking-wider font-bold">
               Featured Premiere
@@ -81,7 +81,7 @@ export function TvShowsPage({ onSelectPreset }) {
         <h3 className="text-sm font-bold text-white tracking-tight uppercase font-mono">
           Available Series
         </h3>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
           {tvSeries.map((show) => (
             <MovieCard
               key={show.id}

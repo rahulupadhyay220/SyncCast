@@ -1,5 +1,4 @@
 import React from 'react';
-import { ArrowRight, Clock } from 'lucide-react';
 
 export function FeatureCard({
   image,
@@ -8,10 +7,7 @@ export function FeatureCard({
   categoryIcon: CategoryIcon,
   title,
   description,
-  metaIcon: MetaIcon = Clock,
   metaText,
-  actionText = 'Explore',
-  onAction,
 }) {
   return (
     <div className="group rounded-xl bg-[#090b10] border border-white/[0.07] hover:border-white/20 transition-all duration-200 p-5 flex flex-col justify-between">
@@ -24,6 +20,9 @@ export function FeatureCard({
               alt={imageAlt || title}
               className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
               loading="lazy"
+              onError={(e) => {
+                e.currentTarget.src = 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=800&q=80';
+              }}
             />
             {category && (
               <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5 px-2.5 py-1 rounded bg-black/80 backdrop-blur-sm text-zinc-200 text-[10px] font-mono border border-white/10">
@@ -44,20 +43,13 @@ export function FeatureCard({
         </div>
       </div>
 
-      <div className="pt-4 mt-4 border-t border-white/[0.06] flex items-center justify-between text-xs font-mono">
-        <span className="text-[11px] text-zinc-500">
-          {metaText || 'Sub-25ms Sync'}
-        </span>
-
-        <button
-          type="button"
-          onClick={onAction}
-          className="text-xs font-sans font-medium text-zinc-300 hover:text-white flex items-center gap-1 cursor-pointer transition-colors"
-        >
-          <span>{actionText}</span>
-          <ArrowRight className="w-3.5 h-3.5 text-[#e50914]" />
-        </button>
-      </div>
+      {metaText && (
+        <div className="pt-3.5 mt-4 border-t border-white/[0.06] flex items-center justify-between text-xs font-mono">
+          <span className="text-[11px] text-zinc-500">
+            {metaText}
+          </span>
+        </div>
+      )}
     </div>
   );
 }

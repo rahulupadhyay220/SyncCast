@@ -2,7 +2,7 @@ import React from 'react';
 import { FeatureCard } from './FeatureCard';
 import { Zap, Shield, Sparkles, MessageCircle } from 'lucide-react';
 
-export function FeaturesSection({ onExplore }) {
+export function FeaturesSection() {
   const features = [
     {
       category: 'Frame Sync',
@@ -34,7 +34,7 @@ export function FeaturesSection({ onExplore }) {
       title: 'Instant YouTube Streams & Custom URLs',
       description: 'Switch smoothly between curated 4K sci-fi streams, lofi mixes, documentary premieres, or paste any public YouTube link directly.',
       metaText: 'YouTube Integration',
-      image: 'https://images.unsplash.com/photo-1536240478700-b869070f9279?auto=format&fit=crop&w=800&q=80',
+      image: 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=800&q=80',
     },
   ];
 
@@ -63,7 +63,6 @@ export function FeaturesSection({ onExplore }) {
               description={f.description}
               metaText={f.metaText}
               image={f.image}
-              onAction={onExplore}
             />
           ))}
         </div>

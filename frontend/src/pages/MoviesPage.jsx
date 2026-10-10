@@ -17,7 +17,7 @@ export function MoviesPage({ onSelectPreset }) {
   });
 
   return (
-    <div className="min-h-screen bg-[#050608] text-zinc-100 py-10 px-4 sm:px-6 lg:px-8 space-y-8 animate-fadeIn select-none">
+    <div className="min-h-screen bg-[#050608] text-zinc-100 py-8 sm:py-10 px-3 sm:px-6 lg:px-8 space-y-6 sm:space-y-8 animate-fadeIn select-none">
       {/* Header Banner */}
       <div className="max-w-7xl mx-auto space-y-4">
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 pb-4 border-b border-white/[0.07]">
@@ -52,7 +52,7 @@ export function MoviesPage({ onSelectPreset }) {
             <button
               key={genre}
               onClick={() => setSelectedGenre(genre)}
-              className={`px-3 py-1 rounded-md text-xs font-mono transition-colors cursor-pointer ${
+              className={`px-3 py-1 rounded-md text-xs font-mono transition-colors cursor-pointer shrink-0 ${
                 selectedGenre === genre
                   ? 'bg-zinc-800 text-white font-semibold border border-zinc-700'
                   : 'bg-zinc-900/60 border border-white/10 text-zinc-400 hover:text-white hover:bg-zinc-900'
@@ -77,7 +77,7 @@ export function MoviesPage({ onSelectPreset }) {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
             {filteredMovies.map((movie) => (
               <MovieCard
                 key={movie.id}
