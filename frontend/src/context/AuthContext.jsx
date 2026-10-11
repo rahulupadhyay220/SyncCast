@@ -3,6 +3,28 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 const AuthContext = createContext(null);
 
+const syncWithMongoDB = async (userData) => {
+  if (!userData) return;
+  try {
+    const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080';
+    const meta = userData.user_metadata || {};
+    const effectiveName = meta.full_name || meta.display_name || meta.name || userData.email?.split('@')[0] || 'User';
+    await fetch(`${backendUrl}/api/auth/sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: userData.id,
+        email: userData.email,
+        fullName: effectiveName,
+        username: effectiveName.replace(/\s+/g, '_'),
+      }),
+    });
+  } catch (err) {
+    // Non-blocking background sync notice
+    console.warn('[MongoDB User Sync Notice]:', err?.message);
+  }
+};
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [session, setSession] = useState(null);
@@ -20,6 +42,7 @@ export function AuthProvider({ children }) {
       displayName: meta.display_name || meta.full_name || user.email?.split('@')[0] || 'User',
       avatarColor: meta.avatar_color || 'bg-red-600',
       isEmailConfirmed: Boolean(user.email_confirmed_at || user.confirmed_at),
+      canHost: true, // Every authenticated account is treated as a Host account by default
       createdAt: user.created_at,
       lastSignInAt: user.last_sign_in_at,
     };
@@ -40,6 +63,7 @@ export function AuthProvider({ children }) {
               if (mounted && parsed?.user) {
                 setSession(parsed);
                 setUser(parsed.user);
+                syncWithMongoDB(parsed.user);
               }
             } catch (e) {
               console.warn('[Local Auth] Failed to restore session:', e);
@@ -55,6 +79,9 @@ export function AuthProvider({ children }) {
         if (mounted) {
           setSession(data?.session || null);
           setUser(data?.session?.user || null);
+          if (data?.session?.user) {
+            syncWithMongoDB(data.session.user);
+          }
         }
       } catch (err) {
         console.warn('[Supabase Auth] Initialization exception:', err);
@@ -87,6 +114,9 @@ export function AuthProvider({ children }) {
         setSession(null);
       } else if (event === 'SIGNED_IN' || event === 'USER_UPDATED' || event === 'TOKEN_REFRESHED') {
         setUser(currentSession?.user || null);
+        if (currentSession?.user) {
+          syncWithMongoDB(currentSession.user);
+        }
       }
     });
 
@@ -150,6 +180,7 @@ export function AuthProvider({ children }) {
 
         setUser(demoUser);
         setSession(demoSession);
+        syncWithMongoDB(demoUser);
 
         return {
           success: true,
@@ -193,6 +224,10 @@ export function AuthProvider({ children }) {
         const dupMsg = 'An account with this email address already exists. Please sign in instead.';
         setAuthError(dupMsg);
         return { success: false, error: dupMsg };
+      }
+
+      if (data?.user) {
+        syncWithMongoDB(data.user);
       }
 
       return {
@@ -257,6 +292,7 @@ export function AuthProvider({ children }) {
         localStorage.setItem('synccast_local_session', JSON.stringify(demoSession));
         setUser(demoUser);
         setSession(demoSession);
+        syncWithMongoDB(demoUser);
 
         return { success: true, user: demoUser, session: demoSession };
       } catch (err) {
@@ -288,6 +324,9 @@ export function AuthProvider({ children }) {
 
       setUser(data.user);
       setSession(data.session);
+      if (data?.user) {
+        syncWithMongoDB(data.user);
+      }
       return { success: true, user: data.user, session: data.session };
     } catch (err) {
       let msg = err.message || 'Failed to sign in. Please try again.';

@@ -21,4 +21,14 @@ router.get('/', RoomController.getPublicRooms);
 // GET /api/rooms/:roomId - Retrieve room state
 router.get('/:roomId', validate(getRoomSchema, 'params'), RoomController.getRoom);
 
+// Stream control & RBAC endpoints (Host only validation enforced)
+router.post('/:roomId/play', RoomController.playStream);
+router.post('/:roomId/pause', RoomController.pauseStream);
+router.post('/:roomId/end', RoomController.endStream);
+router.post('/:roomId/seek', RoomController.seekStream);
+router.post('/:roomId/change-video', RoomController.changeVideo);
+router.post('/:roomId/assign-role', RoomController.assignRole);
+router.post('/:roomId/transfer-host', RoomController.transferHost);
+router.post('/:roomId/remove-participant', RoomController.removeParticipant);
+
 export default router;

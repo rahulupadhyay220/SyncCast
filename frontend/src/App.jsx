@@ -52,6 +52,7 @@ export default function App() {
       initialUrl: stream.url,
       title: stream.title,
       role: 'Host',
+      isHost: true,
     });
     navigate('/room', {
       state: {
@@ -61,12 +62,12 @@ export default function App() {
     });
   }, [effectiveSignedIn, signedInName, watchParty, navigate]);
 
-  // Check URL query parameter for direct room joins (e.g. ?room=SYNC-7729)
+  // Check URL query parameter for direct room joins (e.g. ?room=SYNC-7729 or ?code=SYNC-7729)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const roomParam = params.get('room');
-    if (roomParam && !watchParty.isInRoom && location.pathname !== '/join') {
-      navigate(`/join?room=${roomParam}`);
+    const roomParam = params.get('room') || params.get('code') || params.get('roomCode');
+    if (roomParam && !watchParty.isInRoom && !location.pathname.startsWith('/join')) {
+      navigate(`/join?room=${encodeURIComponent(roomParam.trim().toUpperCase())}`);
     }
   }, [watchParty.isInRoom, location.pathname, navigate]);
 
@@ -183,7 +184,25 @@ export default function App() {
             element={
               <JoinPartyPage
                 onJoinParty={(data) => {
-                  const safeRole = data.role === 'Host' ? 'Participant' : (data.role || 'Participant');
+                  const safeRole = 'Participant';
+                  const res = watchParty.joinParty({ ...data, role: safeRole, isHost: false });
+                  if (res?.success) {
+                    navigate('/room');
+                  }
+                  return res;
+                }}
+                sendRejoinRequest={watchParty.sendRejoinRequest}
+                rejoinStatus={watchParty.rejoinStatus}
+                setRejoinStatus={watchParty.setRejoinStatus}
+              />
+            }
+          />
+          <Route
+            path="/join/:roomCode"
+            element={
+              <JoinPartyPage
+                onJoinParty={(data) => {
+                  const safeRole = 'Participant';
                   const res = watchParty.joinParty({ ...data, role: safeRole, isHost: false });
                   if (res?.success) {
                     navigate('/room');
@@ -255,6 +274,9 @@ export default function App() {
                   isMuted={watchParty.isMuted}
                   setIsMuted={watchParty.setIsMuted}
                   participants={watchParty.participants}
+                  transferHost={watchParty.transferHost}
+                  muteUser={watchParty.muteUser}
+                  endStream={watchParty.endStream}
                   promoteUser={watchParty.promoteUser}
                   demoteUser={watchParty.demoteUser}
                   kickUser={watchParty.kickUser}
@@ -270,6 +292,7 @@ export default function App() {
                   connectionStatus={watchParty.connectionStatus}
                   latency={watchParty.latency}
                   onLeaveRoom={handleLeaveRoom}
+                  sessionEndedNotice={watchParty.sessionEndedNotice}
                 />
               ) : (sessionStorage.getItem('pendingStream') || sessionStorage.getItem('pendingJoin') || sessionStorage.getItem('pendingHost')) ? (
                 <div className="min-h-[70vh] flex flex-col items-center justify-center gap-3">

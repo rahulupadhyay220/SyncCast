@@ -1,4 +1,5 @@
 import Room from '../models/Room.js';
+import RoomParticipant from '../models/RoomParticipant.js';
 import { ROLES } from '../config/permissions.js';
 import { ApiError } from '../utils/errorResponse.js';
 import { generateRoomCode, normalizeRoomId } from '../utils/roomCodeGenerator.js';
@@ -46,8 +47,12 @@ export class RoomService {
 
     const room = new Room({
       roomId,
+      roomCode: roomId,
       roomName,
       hostId,
+      currentHostId: hostId,
+      streamStatus: 'paused',
+      createdDate: new Date(),
       currentVideoId: initialVideoId,
       currentVideoTitle: initialVideoTitle,
       currentTime: 0,
@@ -58,6 +63,26 @@ export class RoomService {
     });
 
     await room.save();
+
+    // Persist Host in Room Participants collection in MongoDB
+    try {
+      await RoomParticipant.findOneAndUpdate(
+        { roomId, userId: hostId },
+        {
+          userId: hostId,
+          roomId,
+          username,
+          role: ROLES.HOST,
+          joinTime: new Date(),
+          leaveTime: null,
+          status: 'active',
+        },
+        { upsert: true, new: true }
+      );
+    } catch (err) {
+      logger.warn(`Failed to save initial RoomParticipant record: ${err.message}`);
+    }
+
     logger.info(`Room created: ${roomId} by host: ${username} (${hostId})`);
     return room;
   }
@@ -100,26 +125,31 @@ export class RoomService {
       return { room, role: null, isRemoved: true, requiresApproval: true };
     }
 
+    // Check if user is the designated host of this room
+    const isRoomHost = (room.hostId === userId || room.currentHostId === userId);
+
     // Check if participant already exists in room
     const existingIndex = room.participants.findIndex((p) => p.userId === userId);
 
-    let assignedRole = role || ROLES.PARTICIPANT;
+    let assignedRole = isRoomHost ? ROLES.HOST : ROLES.GUEST;
 
     if (existingIndex !== -1) {
       // Existing user re-joining or refreshing socket
       const existing = room.participants[existingIndex];
-      // Retain existing role (especially if user is Host or Moderator)
-      assignedRole = existing.role;
+      // Only retain Host role if user is actually the designated host
+      if (isRoomHost || (existing.role === ROLES.HOST && (room.hostId === userId || room.currentHostId === userId))) {
+        assignedRole = ROLES.HOST;
+      } else {
+        // Enforce Guest/Participant for all non-hosts
+        assignedRole = ROLES.GUEST;
+      }
+      existing.role = assignedRole;
       existing.username = username;
       existing.socketId = socketId || existing.socketId;
       existing.isActive = true;
     } else {
-      // New user joining: If user is the designated hostId, assign Host, else Participant
-      if (room.hostId === userId) {
-        assignedRole = ROLES.HOST;
-      } else {
-        assignedRole = ROLES.PARTICIPANT;
-      }
+      // New user joining: If user is the designated hostId, assign Host, else strictly Guest
+      assignedRole = isRoomHost ? ROLES.HOST : ROLES.GUEST;
 
       room.participants.push({
         userId,
@@ -132,6 +162,27 @@ export class RoomService {
     }
 
     await room.save();
+
+    // Persist in RoomParticipant collection in MongoDB
+    try {
+      await RoomParticipant.findOneAndUpdate(
+        { roomId: normalizedId, userId },
+        {
+          userId,
+          roomId: normalizedId,
+          username,
+          role: assignedRole,
+          joinTime: new Date(),
+          leaveTime: null,
+          status: 'active',
+          socketId,
+        },
+        { upsert: true, new: true }
+      );
+    } catch (err) {
+      logger.warn(`Failed to save RoomParticipant record on join: ${err.message}`);
+    }
+
     logger.info(`User ${username} (${userId}) joined room ${normalizedId} as ${assignedRole}`);
     return { room, role: assignedRole, isRemoved: false, requiresApproval: false };
   }
@@ -154,28 +205,28 @@ export class RoomService {
 
   /**
    * Plays video stream.
-   * Updates playbackState to 'playing' and resets timestamp anchor.
-   * 
-   * SYNCHRONIZATION LOGIC:
-   * When video resumes play, we anchor currentTime to the provided playhead point
-   * (or calculated current time) and set lastActionTimestamp to Date.now().
-   * Any client polling or newly joining will add the elapsed wall-clock time
-   * from lastActionTimestamp to this anchor point, ensuring perfect playback lock.
+   * Updates playbackState to 'playing', streamStatus to 'live', and resets timestamp anchor.
    * 
    * @param {object} params
    * @param {string} params.roomId
    * @param {number} [params.currentTime]
+   * @param {string} [params.requesterId]
    */
-  static async playVideo({ roomId, currentTime }) {
+  static async playVideo({ roomId, currentTime, requesterId = null }) {
     const normalizedId = normalizeRoomId(roomId);
     const room = await Room.findOne({ roomId: normalizedId });
     if (!room) throw ApiError.notFound('Room not found');
+
+    if (requesterId && room.hostId !== requesterId && room.currentHostId !== requesterId) {
+      throw ApiError.forbidden('Only the room Host can control stream playback');
+    }
 
     const anchorTime = typeof currentTime === 'number' && !isNaN(currentTime)
       ? currentTime
       : room.getSyncedCurrentTime();
 
     room.playbackState = 'playing';
+    room.streamStatus = 'live';
     room.currentTime = anchorTime;
     room.lastActionTimestamp = Date.now();
 
@@ -186,22 +237,28 @@ export class RoomService {
 
   /**
    * Pauses video stream.
-   * Sets playbackState to 'paused' and freezes anchor timestamp.
+   * Sets playbackState to 'paused', streamStatus to 'paused', and freezes anchor timestamp.
    * 
    * @param {object} params
    * @param {string} params.roomId
    * @param {number} [params.currentTime]
+   * @param {string} [params.requesterId]
    */
-  static async pauseVideo({ roomId, currentTime }) {
+  static async pauseVideo({ roomId, currentTime, requesterId = null }) {
     const normalizedId = normalizeRoomId(roomId);
     const room = await Room.findOne({ roomId: normalizedId });
     if (!room) throw ApiError.notFound('Room not found');
+
+    if (requesterId && room.hostId !== requesterId && room.currentHostId !== requesterId) {
+      throw ApiError.forbidden('Only the room Host can control stream playback');
+    }
 
     const freezeTime = typeof currentTime === 'number' && !isNaN(currentTime)
       ? currentTime
       : room.getSyncedCurrentTime();
 
     room.playbackState = 'paused';
+    room.streamStatus = 'paused';
     room.currentTime = freezeTime;
     room.lastActionTimestamp = Date.now();
 
@@ -216,11 +273,16 @@ export class RoomService {
    * @param {object} params
    * @param {string} params.roomId
    * @param {number} params.currentTime
+   * @param {string} [params.requesterId]
    */
-  static async seekVideo({ roomId, currentTime }) {
+  static async seekVideo({ roomId, currentTime, requesterId = null }) {
     const normalizedId = normalizeRoomId(roomId);
     const room = await Room.findOne({ roomId: normalizedId });
     if (!room) throw ApiError.notFound('Room not found');
+
+    if (requesterId && room.hostId !== requesterId && room.currentHostId !== requesterId) {
+      throw ApiError.forbidden('Only the room Host can control stream playback');
+    }
 
     room.currentTime = Math.max(0, currentTime);
     room.lastActionTimestamp = Date.now();
@@ -238,11 +300,16 @@ export class RoomService {
    * @param {string} params.roomId
    * @param {string} params.videoId
    * @param {string} [params.videoTitle]
+   * @param {string} [params.requesterId]
    */
-  static async changeVideo({ roomId, videoId, videoTitle }) {
+  static async changeVideo({ roomId, videoId, videoTitle, requesterId = null }) {
     const normalizedId = normalizeRoomId(roomId);
     const room = await Room.findOne({ roomId: normalizedId });
     if (!room) throw ApiError.notFound('Room not found');
+
+    if (requesterId && room.hostId !== requesterId && room.currentHostId !== requesterId) {
+      throw ApiError.forbidden('Only the room Host can change the video');
+    }
 
     room.currentVideoId = videoId;
     if (videoTitle) {
@@ -250,6 +317,7 @@ export class RoomService {
     }
     room.currentTime = 0;
     room.playbackState = 'playing';
+    room.streamStatus = 'live';
     room.lastActionTimestamp = Date.now();
 
     await room.save();
@@ -258,7 +326,44 @@ export class RoomService {
   }
 
   /**
+   * Ends current stream / terminates session (Host only feature).
+   * 
+   * @param {object} params
+   * @param {string} params.roomId
+   * @param {string} params.requesterId
+   */
+  static async endStream({ roomId, requesterId }) {
+    const normalizedId = normalizeRoomId(roomId);
+    const room = await Room.findOne({ roomId: normalizedId });
+    if (!room) throw ApiError.notFound('Room not found');
+
+    if (room.hostId !== requesterId && room.currentHostId !== requesterId) {
+      throw ApiError.forbidden('Only the room Host can end the stream');
+    }
+
+    room.playbackState = 'paused';
+    room.streamStatus = 'ended';
+    room.isActive = false;
+    room.lastActionTimestamp = Date.now();
+
+    await room.save();
+
+    try {
+      await RoomParticipant.updateMany(
+        { roomId: normalizedId, status: 'active' },
+        { $set: { status: 'left', leaveTime: new Date() } }
+      );
+    } catch (err) {
+      logger.warn(`Failed to update RoomParticipant records on endStream: ${err.message}`);
+    }
+
+    logger.info(`[RBAC] Room ${normalizedId}: Host ended stream / terminated session`);
+    return room;
+  }
+
+  /**
    * Assigns role to another participant (Host only feature).
+   * Promoting to Host automatically invokes transferHost.
    * 
    * @param {object} params
    * @param {string} params.roomId
@@ -272,17 +377,18 @@ export class RoomService {
     if (!room) throw ApiError.notFound('Room not found');
 
     // Host check
-    if (room.hostId !== requesterId) {
+    if (room.hostId !== requesterId && room.currentHostId !== requesterId) {
       throw ApiError.forbidden('Only the room Host can assign roles');
     }
 
-    // Cannot demote or change Host role through assignRole (use transferHost instead)
-    if (room.hostId === targetUserId) {
-      throw ApiError.badRequest('Cannot change host role via assign_role. Use transfer_host instead.');
+    // Delegating Host role assignment to host transfer
+    if (newRole === ROLES.HOST) {
+      return await this.transferHost({ roomId: normalizedId, newHostId: targetUserId, requesterId });
     }
 
-    if (newRole === ROLES.HOST) {
-      throw ApiError.badRequest('To make another user Host, use transfer_host.');
+    // Cannot demote or change Host role through assignRole
+    if (room.hostId === targetUserId || room.currentHostId === targetUserId) {
+      throw ApiError.badRequest('Cannot change host role via assign_role. Use transfer_host instead.');
     }
 
     const participant = room.participants.find((p) => p.userId === targetUserId && p.isActive);
@@ -294,6 +400,16 @@ export class RoomService {
     participant.role = newRole;
 
     await room.save();
+
+    try {
+      await RoomParticipant.findOneAndUpdate(
+        { roomId: normalizedId, userId: targetUserId },
+        { role: newRole }
+      );
+    } catch (err) {
+      logger.warn(`Failed to update RoomParticipant role: ${err.message}`);
+    }
+
     logger.info(`[RBAC] Room ${normalizedId}: User ${targetUserId} role updated ${previousRole} -> ${newRole}`);
     return { room, targetUserId, newRole, previousRole };
   }
@@ -311,11 +427,11 @@ export class RoomService {
     const room = await Room.findOne({ roomId: normalizedId });
     if (!room) throw ApiError.notFound('Room not found');
 
-    if (room.hostId !== requesterId) {
+    if (room.hostId !== requesterId && room.currentHostId !== requesterId) {
       throw ApiError.forbidden('Only the room Host can remove participants');
     }
 
-    if (room.hostId === targetUserId) {
+    if (room.hostId === targetUserId || room.currentHostId === targetUserId) {
       throw ApiError.badRequest('Host cannot remove themselves from room');
     }
 
@@ -342,6 +458,16 @@ export class RoomService {
     }
 
     await room.save();
+
+    try {
+      await RoomParticipant.findOneAndUpdate(
+        { roomId: normalizedId, userId: targetUserId },
+        { status: 'removed', leaveTime: new Date() }
+      );
+    } catch (err) {
+      logger.warn(`Failed to update RoomParticipant on removal: ${err.message}`);
+    }
+
     logger.info(`[RBAC] Room ${normalizedId}: Participant ${targetUserId} (${removedParticipant?.username}) removed by Host`);
     return { room, removedParticipant };
   }
@@ -360,11 +486,11 @@ export class RoomService {
     const room = await Room.findOne({ roomId: normalizedId });
     if (!room) throw ApiError.notFound('Room not found');
 
-    if (room.hostId !== requesterId) {
+    if (room.hostId !== requesterId && room.currentHostId !== requesterId) {
       throw ApiError.forbidden('Only the room Host can block participants');
     }
 
-    if (room.hostId === targetUserId) {
+    if (room.hostId === targetUserId || room.currentHostId === targetUserId) {
       throw ApiError.badRequest('Host cannot block themselves from room');
     }
 
@@ -397,6 +523,16 @@ export class RoomService {
     }
 
     await room.save();
+
+    try {
+      await RoomParticipant.findOneAndUpdate(
+        { roomId: normalizedId, userId: targetUserId },
+        { status: 'blocked', leaveTime: new Date() }
+      );
+    } catch (err) {
+      logger.warn(`Failed to update RoomParticipant on block: ${err.message}`);
+    }
+
     logger.info(`[RBAC] Room ${normalizedId}: Participant ${targetUserId} (${targetUsername}) PERMANENTLY BLOCKED by Host`);
     return { room, blockedUserId: targetUserId, targetUsername };
   }
@@ -414,7 +550,7 @@ export class RoomService {
     const room = await Room.findOne({ roomId: normalizedId });
     if (!room) throw ApiError.notFound('Room not found');
 
-    if (room.hostId !== requesterId) {
+    if (room.hostId !== requesterId && room.currentHostId !== requesterId) {
       throw ApiError.forbidden('Only the room Host can approve rejoin requests');
     }
 
@@ -439,7 +575,7 @@ export class RoomService {
     const room = await Room.findOne({ roomId: normalizedId });
     if (!room) throw ApiError.notFound('Room not found');
 
-    if (room.hostId !== requesterId) {
+    if (room.hostId !== requesterId && room.currentHostId !== requesterId) {
       throw ApiError.forbidden('Only the room Host can reject rejoin requests');
     }
 
@@ -450,7 +586,7 @@ export class RoomService {
   /**
    * Transfers Host ownership to another active participant.
    * 
-   * Old host becomes Moderator or Participant.
+   * Old host becomes Guest/Participant.
    * New host receives Host permissions and hostId is updated.
    * 
    * @param {object} params
@@ -463,7 +599,7 @@ export class RoomService {
     const room = await Room.findOne({ roomId: normalizedId });
     if (!room) throw ApiError.notFound('Room not found');
 
-    if (room.hostId !== requesterId) {
+    if (room.hostId !== requesterId && room.currentHostId !== requesterId) {
       throw ApiError.forbidden('Only the current Host can transfer host ownership');
     }
 
@@ -479,17 +615,35 @@ export class RoomService {
       throw ApiError.notFound('Designated new host is not an active participant in this room');
     }
 
-    // Demote old host to Moderator so they retain co-management playback rights
+    // Demote old host to Guest so they no longer hold exclusive host controls
     const oldHostParticipant = room.participants.find((p) => p.userId === requesterId);
     if (oldHostParticipant) {
-      oldHostParticipant.role = ROLES.MODERATOR;
+      oldHostParticipant.role = ROLES.GUEST;
     }
 
     // Promote new host
     targetParticipant.role = ROLES.HOST;
     room.hostId = newHostId;
+    room.currentHostId = newHostId;
 
     await room.save();
+
+    // Persist ownership transfer in RoomParticipant collection in MongoDB
+    try {
+      await RoomParticipant.findOneAndUpdate(
+        { roomId: normalizedId, userId: newHostId },
+        { role: ROLES.HOST, status: 'active' },
+        { upsert: true }
+      );
+      await RoomParticipant.findOneAndUpdate(
+        { roomId: normalizedId, userId: requesterId },
+        { role: ROLES.GUEST, status: 'active' },
+        { upsert: true }
+      );
+    } catch (err) {
+      logger.warn(`Failed to update RoomParticipant records on transferHost: ${err.message}`);
+    }
+
     logger.info(`[RBAC] Room ${normalizedId}: Host transferred ${requesterId} -> ${newHostId}`);
     return {
       room,
@@ -522,10 +676,20 @@ export class RoomService {
     if (participantIndex === -1) return null;
 
     const disconnectedUser = room.participants[participantIndex];
-    const wasHost = room.hostId === disconnectedUser.userId;
+    const wasHost = (room.hostId === disconnectedUser.userId || room.currentHostId === disconnectedUser.userId);
 
     // Remove or mark inactive
     room.participants.splice(participantIndex, 1);
+
+    // Update RoomParticipant collection in MongoDB
+    try {
+      await RoomParticipant.findOneAndUpdate(
+        { roomId: room.roomId, userId: disconnectedUser.userId },
+        { status: 'left', leaveTime: new Date() }
+      );
+    } catch (err) {
+      logger.warn(`Failed to update RoomParticipant on socket disconnect: ${err.message}`);
+    }
 
     let hostPromotion = null;
 
@@ -539,6 +703,16 @@ export class RoomService {
         const oldest = remainingActive[0];
         oldest.role = ROLES.HOST;
         room.hostId = oldest.userId;
+        room.currentHostId = oldest.userId;
+
+        try {
+          await RoomParticipant.findOneAndUpdate(
+            { roomId: room.roomId, userId: oldest.userId },
+            { role: ROLES.HOST, status: 'active' }
+          );
+        } catch (err) {
+          logger.warn(`Failed to promote RoomParticipant to Host on disconnect: ${err.message}`);
+        }
 
         hostPromotion = {
           previousHostId: disconnectedUser.userId,

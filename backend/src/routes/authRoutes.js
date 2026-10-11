@@ -29,4 +29,7 @@ router.get('/me', requireAuth, AuthController.getCurrentUser);
 // POST /api/auth/logout
 router.post('/logout', AuthController.logout);
 
+// POST /api/auth/sync - Sync authenticated profile into MongoDB
+router.post('/sync', AuthController.syncUser);
+
 export default router;

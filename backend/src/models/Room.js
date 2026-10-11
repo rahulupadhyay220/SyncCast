@@ -91,6 +91,16 @@ const roomSchema = new mongoose.Schema(
       trim: true,
       uppercase: true,
     },
+    roomCode: {
+      type: String,
+      required: true,
+      index: true,
+      trim: true,
+      uppercase: true,
+      default: function () {
+        return this.roomId;
+      },
+    },
     roomName: {
       type: String,
       required: true,
@@ -102,6 +112,29 @@ const roomSchema = new mongoose.Schema(
       required: true,
       index: true,
       trim: true,
+    },
+    currentHostId: {
+      type: String,
+      index: true,
+      trim: true,
+      default: function () {
+        return this.hostId;
+      },
+    },
+    streamStatus: {
+      type: String,
+      enum: ['live', 'paused', 'ended'],
+      default: 'paused',
+      index: true,
+    },
+    isActive: {
+      type: Boolean,
+      default: true,
+      index: true,
+    },
+    createdDate: {
+      type: Date,
+      default: Date.now,
     },
     currentVideoId: {
       type: String,
@@ -141,6 +174,24 @@ const roomSchema = new mongoose.Schema(
   }
 );
 
+roomSchema.pre('save', function (next) {
+  if (!this.roomCode && this.roomId) {
+    this.roomCode = this.roomId;
+  }
+  if (!this.currentHostId && this.hostId) {
+    this.currentHostId = this.hostId;
+  }
+  if (!this.hostId && this.currentHostId) {
+    this.hostId = this.currentHostId;
+  }
+  if (this.playbackState === 'playing' && this.streamStatus !== 'ended') {
+    this.streamStatus = 'live';
+  } else if (this.playbackState === 'paused' && this.streamStatus !== 'ended') {
+    this.streamStatus = 'paused';
+  }
+  next();
+});
+
 /**
  * Calculates current frame-accurate timestamp accounting for time elapsed while playing.
  * 
@@ -166,8 +217,12 @@ roomSchema.methods.getSyncedCurrentTime = function () {
 roomSchema.methods.toRoomState = function () {
   return {
     roomId: this.roomId,
+    roomCode: this.roomCode || this.roomId,
     roomName: this.roomName,
     hostId: this.hostId,
+    currentHostId: this.currentHostId || this.hostId,
+    streamStatus: this.streamStatus || (this.playbackState === 'playing' ? 'live' : 'paused'),
+    createdDate: this.createdDate || this.createdAt,
     currentVideoId: this.currentVideoId,
     currentVideoTitle: this.currentVideoTitle,
     currentTime: this.getSyncedCurrentTime(),

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Key, Tv, ArrowRight, User, ShieldAlert, Clock, Lock } from 'lucide-react';
 import { FEATURED_MOVIES } from '../data/movies';
@@ -14,20 +14,27 @@ export function JoinPartyPage({
 }) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const routeParams = useParams();
   const { user, isLoaded, isSignedIn, effectiveSignedIn } = useAuth();
   const signedInName = getUserDisplayName(user);
 
+  const rawRoomCode =
+    searchParams.get('room') ||
+    searchParams.get('code') ||
+    searchParams.get('roomCode') ||
+    routeParams?.roomCode ||
+    '';
+
   const [name, setName] = useState(signedInName || 'Guest');
-  const [code, setCode] = useState(() => searchParams.get('room')?.toUpperCase() || 'SYNC-7729');
-  const [role, setRole] = useState('Participant');
+  const [code, setCode] = useState(() => (rawRoomCode ? rawRoomCode.trim().toUpperCase() : 'SYNC-7729'));
   const [waitingForHost, setWaitingForHost] = useState(false);
   const [pendingRejoinData, setPendingRejoinData] = useState(null);
 
-  const attemptJoin = React.useCallback((targetCode, targetName, targetRole) => {
+  const attemptJoin = React.useCallback((targetCode, targetName) => {
     const finalCode = (targetCode || '').trim().toUpperCase() || 'SYNC-7729';
     const finalName = (targetName || '').trim() || signedInName || 'Guest';
-    // Rule: A user joining any stream through invitation code in enter code page cannot join as a host
-    const finalRole = targetRole === 'Host' || !targetRole ? 'Participant' : targetRole;
+    // Rule: Anyone joining through invitation code or link enters strictly as a Guest
+    const finalRole = 'Participant';
 
     if (!effectiveSignedIn) {
       sessionStorage.setItem(
@@ -90,8 +97,8 @@ export function JoinPartyPage({
     }
   }, [signedInName, effectiveSignedIn, navigate, sendRejoinRequest, onJoinParty]);
 
-  // Pre-fill room code from URL query parameter if present during render
-  const roomFromUrl = searchParams.get('room');
+  // Pre-fill room code from URL query parameter or route param if present during render
+  const roomFromUrl = rawRoomCode;
   const [prevRoomFromUrl, setPrevRoomFromUrl] = useState(roomFromUrl);
   if (roomFromUrl && roomFromUrl !== prevRoomFromUrl) {
     setPrevRoomFromUrl(roomFromUrl);
@@ -186,12 +193,12 @@ export function JoinPartyPage({
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    attemptJoin(code, name, role);
+    attemptJoin(code, name);
   };
 
   const handleJoinPreset = (presetRoom) => {
     setCode(presetRoom.code);
-    attemptJoin(presetRoom.code, name, role);
+    attemptJoin(presetRoom.code, name);
   };
 
   return (
@@ -257,36 +264,21 @@ export function JoinPartyPage({
               </div>
             </div>
 
-            {/* Role Simulation Selector - Restricted to Audience/Joiner roles (Host is Creator Only) */}
-            <div className="space-y-2">
+            {/* Join Role Information - All joining participants enter strictly as Guest/Participant */}
+            <div className="space-y-2 p-3.5 rounded-lg bg-zinc-900/60 border border-white/10">
               <div className="flex items-center justify-between text-xs">
-                <span className="font-mono uppercase tracking-wider text-zinc-400">Perspective</span>
-                <span className="text-[11px] text-zinc-500 font-mono flex items-center gap-1">
-                  <Lock className="w-3 h-3 text-zinc-500" />
+                <div className="flex items-center gap-1.5 text-zinc-300 font-semibold font-mono uppercase tracking-wider">
+                  <User className="w-3.5 h-3.5 text-zinc-400" />
+                  <span>Joining Role: Guest</span>
+                </div>
+                <span className="text-[11px] text-amber-400/90 font-mono flex items-center gap-1">
+                  <Lock className="w-3 h-3 text-amber-400" />
                   <span>Host is creator only</span>
                 </span>
               </div>
-
-              <div className="grid grid-cols-2 gap-1.5 p-1 bg-zinc-900/70 rounded-lg border border-white/10">
-                {[
-                  { id: 'Participant', label: 'Guest', sub: 'View & Chat' },
-                  { id: 'Moderator', label: 'Moderator', sub: 'Chat & React' },
-                ].map((item) => (
-                  <button
-                    type="button"
-                    key={item.id}
-                    onClick={() => setRole(item.id)}
-                    className={`py-2 px-2 rounded-md text-center transition-colors cursor-pointer ${
-                      role === item.id
-                        ? 'bg-zinc-800 text-white font-semibold shadow-xs'
-                        : 'text-zinc-400 hover:text-zinc-200'
-                    }`}
-                  >
-                    <div className="text-xs font-semibold">{item.label}</div>
-                    <div className="text-[10px] text-zinc-500 mt-0.5 font-mono">{item.sub}</div>
-                  </button>
-                ))}
-              </div>
+              <p className="text-[11px] text-zinc-400 leading-relaxed">
+                You will enter as an Audience Guest with watch, listen, and live chat access. Stream playback controls and room settings are strictly reserved for the Room Host.
+              </p>
             </div>
 
             {/* Unauthenticated notice */}

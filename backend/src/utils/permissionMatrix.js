@@ -50,6 +50,8 @@ export const formatRoleName = (role) => {
   switch (normalized) {
     case 'host':
       return ROLES.HOST;
+    case 'guest':
+      return ROLES.GUEST;
     case 'moderator':
       return ROLES.MODERATOR;
     case 'viewer':

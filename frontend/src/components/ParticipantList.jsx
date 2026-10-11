@@ -1,13 +1,12 @@
 import React from 'react';
-import { UserMinus, Ban, ArrowUpCircle, ArrowDownCircle, Crown, UserPlus } from 'lucide-react';
+import { UserMinus, Ban, Crown, UserPlus, MicOff } from 'lucide-react';
 import { getAvatarColor, getInitials } from '../utils/avatar';
 
 export function ParticipantList({
   participants = [],
   canManageUsers = false,
-  onPromote,
-  onDemote,
-  onKick,
+  onTransferHost,
+  onMuteUser,
   onRemove,
   onBlock,
   onOpenShareModal,
@@ -35,9 +34,14 @@ export function ParticipantList({
             </button>
           )}
 
-          {canManageUsers && (
-            <span className="text-[10px] font-mono font-bold text-[#e50914] bg-[#e50914]/10 px-2 py-0.5 rounded border border-[#e50914]/20 uppercase">
-              Host
+          {canManageUsers ? (
+            <span className="text-[10px] font-mono font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 uppercase flex items-center gap-1">
+              <Crown className="w-3 h-3 text-amber-400" />
+              <span>Host</span>
+            </span>
+          ) : (
+            <span className="text-[10px] font-mono text-zinc-400 bg-zinc-800 px-2 py-0.5 rounded border border-white/10 uppercase">
+              Guest
             </span>
           )}
         </div>
@@ -47,17 +51,15 @@ export function ParticipantList({
       <div className="flex-1 overflow-y-auto p-3 space-y-2 max-h-[460px]">
         {participants.map((user) => {
           const isHost = user.role === 'Host';
-          const isMod = user.role === 'Moderator';
           const isSelf = user.isSelf;
 
           return (
             <div
               key={user.id}
-              className={`p-2.5 rounded-lg border transition-colors flex items-center justify-between gap-3 ${
-                isSelf
+              className={`p-2.5 rounded-lg border transition-colors flex items-center justify-between gap-3 ${isSelf
                   ? 'bg-zinc-800/60 border-white/20'
                   : 'bg-zinc-900/40 border-white/[0.06] hover:bg-zinc-900/80 hover:border-white/10'
-              }`}
+                }`}
             >
               <div className="flex items-center gap-2.5 min-w-0">
                 <div className="relative shrink-0">
@@ -76,6 +78,17 @@ export function ParticipantList({
                     <p className="font-semibold text-xs text-white truncate">
                       {user.name}
                     </p>
+                    {isHost && (
+                      <span className="text-[9px] font-mono font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1 rounded flex items-center gap-0.5">
+                        <Crown className="w-2.5 h-2.5" />
+                        Host
+                      </span>
+                    )}
+                    {!isHost && (
+                      <span className="text-[9px] font-mono text-zinc-400 bg-zinc-800/80 px-1 rounded">
+                        Guest
+                      </span>
+                    )}
                     {isSelf && (
                       <span className="text-[9px] font-mono font-bold text-zinc-400 bg-zinc-800 px-1 rounded">
                         You
@@ -91,38 +104,38 @@ export function ParticipantList({
               {/* Moderation Controls (Host only & not self) */}
               {canManageUsers && !isSelf && (
                 <div className="flex items-center gap-1 shrink-0">
-                  {!isMod && !isHost && (
-                    <button
-                      onClick={() => onPromote?.(user.id)}
-                      className="p-1 rounded text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
-                      title="Promote to Moderator"
-                    >
-                      <ArrowUpCircle className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                  {isMod && (
-                    <button
-                      onClick={() => onDemote?.(user.id)}
-                      className="p-1 rounded text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
-                      title="Demote to Participant"
-                    >
-                      <ArrowDownCircle className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-
-                  {/* Remove Participant from stream (Rule 2) */}
+                  {/* Transfer Host Ownership */}
                   <button
                     onClick={() => {
-                      if (onRemove) onRemove(user.id, user.name);
-                      else onKick?.(user.id);
+                      if (window.confirm(`Transfer host ownership to ${user.name}? You will become a Guest participant.`)) {
+                        onTransferHost?.(user.id, user.name);
+                      }
                     }}
+                    className="p-1 rounded text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 border border-amber-500/20 transition-colors cursor-pointer"
+                    title="Transfer Host Ownership to this participant"
+                  >
+                    <Crown className="w-3.5 h-3.5" />
+                  </button>
+
+                  {/* Mute Participant */}
+                  <button
+                    onClick={() => onMuteUser?.(user.id, user.name)}
+                    className="p-1 rounded text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
+                    title="Mute participant audio"
+                  >
+                    <MicOff className="w-3.5 h-3.5" />
+                  </button>
+
+                  {/* Remove Participant from stream */}
+                  <button
+                    onClick={() => onRemove?.(user.id, user.name)}
                     className="p-1 rounded text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 border border-amber-500/20 transition-colors cursor-pointer"
                     title="Remove participant from stream"
                   >
                     <UserMinus className="w-3.5 h-3.5" />
                   </button>
 
-                  {/* Permanently Block Participant (Rule 5) */}
+                  {/* Permanently Block Participant */}
                   <button
                     onClick={() => onBlock?.(user.id, user.name)}
                     className="p-1 rounded text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 transition-colors cursor-pointer"

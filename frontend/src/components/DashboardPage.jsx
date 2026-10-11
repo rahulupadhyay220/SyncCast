@@ -9,6 +9,8 @@ import {
   Clock,
   ArrowRight,
   Tv,
+  Crown,
+  User,
 } from 'lucide-react';
 import { getUserDisplayName } from '../utils/user';
 
@@ -202,8 +204,17 @@ export function DashboardPage({
               </div>
 
               <div className="flex items-center justify-between sm:justify-end gap-2.5">
-                <span className="text-xs text-zinc-400 font-mono">
-                  Role: <strong className="text-zinc-200 uppercase">{simulatedRole}</strong>
+                <span className="text-xs text-zinc-400 font-mono flex items-center gap-1.5">
+                  Role:
+                  {simulatedRole === 'Host' ? (
+                    <span className="text-amber-400 font-semibold uppercase flex items-center gap-1 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20 text-[11px]">
+                      <Crown className="w-3 h-3" /> Host
+                    </span>
+                  ) : (
+                    <span className="text-zinc-300 font-medium uppercase flex items-center gap-1 bg-zinc-800 px-1.5 py-0.5 rounded border border-white/10 text-[11px]">
+                      <User className="w-3 h-3 text-zinc-400" /> Guest
+                    </span>
+                  )}
                 </span>
                 <button
                   onClick={onGoToTheater}

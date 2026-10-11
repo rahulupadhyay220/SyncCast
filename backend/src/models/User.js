@@ -37,6 +37,15 @@ const userSchema = new mongoose.Schema(
       trim: true,
       default: '',
     },
+    name: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    canHost: {
+      type: Boolean,
+      default: true, // Every authenticated user account has host privileges for their rooms
+    },
     isVerified: {
       type: Boolean,
       default: false,
@@ -60,6 +69,9 @@ const userSchema = new mongoose.Schema(
  * Hash password with bcrypt before saving
  */
 userSchema.pre('save', async function (next) {
+  if (!this.name && (this.fullName || this.username)) {
+    this.name = this.fullName || this.username;
+  }
   if (!this.isModified('passwordHash') || !this.passwordHash) {
     return next();
   }
@@ -86,9 +98,11 @@ userSchema.methods.toClient = function () {
   return {
     userId: this.userId,
     username: this.username,
+    name: this.name || this.fullName || this.username,
     email: this.email || undefined,
     role: this.role || 'user',
-    fullName: this.fullName || '',
+    canHost: this.canHost !== false,
+    fullName: this.fullName || this.name || '',
     isVerified: Boolean(this.isVerified),
     socketId: this.socketId,
     lastActiveAt: this.lastActiveAt,

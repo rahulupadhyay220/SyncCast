@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, LogIn, LogOut, Copy, Check, LayoutDashboard, Tv, Menu, X, UserPlus } from 'lucide-react';
+import { Plus, LogIn, LogOut, Copy, Check, LayoutDashboard, Tv, Menu, X, UserPlus, Crown, User } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { UserMenu } from './UserMenu';
@@ -9,8 +9,8 @@ export function Navbar({
   isInRoom,
   roomCode,
   simulatedRole,
-  isRoomCreator = false,
-  onSwitchRole,
+  _isRoomCreator = false,
+  _onSwitchRole,
   onLeaveRoom,
 }) {
   const [copied, setCopied] = useState(false);
@@ -106,21 +106,20 @@ export function Navbar({
               </button>
             </div>
 
-            {/* Role Switcher Pill */}
-            <div className="hidden md:flex items-center bg-zinc-900/60 p-0.5 rounded-lg border border-white/10 text-xs">
-              <span className="px-2 text-[10px] font-mono uppercase tracking-wider text-zinc-500">Role</span>
-              {(isRoomCreator ? ['Host', 'Moderator', 'Participant'] : ['Moderator', 'Participant']).map((role) => (
-                <button
-                  key={role}
-                  onClick={() => onSwitchRole?.(role)}
-                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${simulatedRole === role
-                    ? 'bg-zinc-800 text-white font-semibold'
-                    : 'text-zinc-400 hover:text-zinc-200'
-                    }`}
-                >
-                  {role}
-                </button>
-              ))}
+            {/* Authenticated Role Badge */}
+            <div className="hidden md:flex items-center px-2.5 py-1 rounded-lg bg-zinc-900/60 border border-white/10 text-xs">
+              <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500 mr-1.5">Role:</span>
+              {simulatedRole === 'Host' ? (
+                <span className="flex items-center gap-1 font-semibold text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 text-xs">
+                  <Crown className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Room Host</span>
+                </span>
+              ) : (
+                <span className="flex items-center gap-1 font-medium text-zinc-300 bg-zinc-800/80 px-2 py-0.5 rounded border border-white/10 text-xs">
+                  <User className="w-3.5 h-3.5 text-zinc-400" />
+                  <span>Guest</span>
+                </span>
+              )}
             </div>
           </div>
         ) : (

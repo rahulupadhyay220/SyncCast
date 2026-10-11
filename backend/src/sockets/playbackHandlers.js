@@ -250,6 +250,51 @@ export const registerPlaybackHandlers = (io, socket, sessions) => {
       socket.emit('error', errResponse);
     }
   });
+
+  /**
+   * Event: end_stream / terminate_session
+   * Host ends the stream and terminates session for all room members
+   */
+  const handleEndStream = async (payload, callback) => {
+    try {
+      const session = guard(ACTIONS.END_STREAM, callback);
+      if (!session) return;
+
+      const roomId = normalizeRoomId(payload?.roomId || session.roomId);
+      const room = await RoomService.endStream({
+        roomId,
+        requesterId: session.userId,
+      });
+
+      const roomState = room.toRoomState();
+
+      // Broadcast stream_ended to all room members
+      io.to(roomId).emit('stream_ended', {
+        roomId,
+        endedBy: {
+          userId: session.userId,
+          username: session.username,
+          role: session.role,
+        },
+        message: 'The host has ended this live streaming session.',
+      });
+
+      // Distribute final room state
+      io.to(roomId).emit('room_updated', roomState);
+
+      const successResponse = { success: true, streamStatus: 'ended' };
+      if (typeof callback === 'function') callback(successResponse);
+      logger.info(`Host ${session.username} ended stream session in room ${roomId}`);
+    } catch (err) {
+      logger.error(`Error in end_stream: ${err.message}`);
+      const errResponse = { success: false, error: err.message };
+      if (typeof callback === 'function') callback(errResponse);
+      socket.emit('error', errResponse);
+    }
+  };
+
+  socket.on('end_stream', handleEndStream);
+  socket.on('terminate_session', handleEndStream);
 };
 
 export default registerPlaybackHandlers;

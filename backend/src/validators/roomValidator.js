@@ -14,7 +14,7 @@ export const joinRoomSchema = z.object({
   roomId: z.string().trim().min(1, 'roomId is required'),
   userId: z.string().trim().min(1, 'userId is required'),
   username: z.string().trim().min(1, 'username is required'),
-  role: z.enum([ROLES.HOST, ROLES.MODERATOR, ROLES.PARTICIPANT, ROLES.VIEWER]).optional(),
+  role: z.enum([ROLES.HOST, ROLES.GUEST, ROLES.MODERATOR, ROLES.PARTICIPANT, ROLES.VIEWER]).optional(),
 });
 
 export const getRoomSchema = z.object({

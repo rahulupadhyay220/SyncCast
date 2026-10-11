@@ -10,10 +10,10 @@ import {
 import { getAvatarColor, getInitials } from '../utils/avatar';
 
 export function PartyChat({
+  roomCode = 'default',
   messages = [],
   onSendMessage,
   onTriggerReaction,
-  reactionCounts = { Like: 0, Love: 0 },
   participantCount = 1,
   participants = [],
   userName = '',
@@ -22,20 +22,74 @@ export function PartyChat({
   onBlockParticipant,
 }) {
   const [text, setText] = useState('');
-  const [userClicks, setUserClicks] = useState({ Like: 0, Love: 0 });
   const chatMessagesRef = useRef(null);
   const isFirstChatRender = useRef(true);
+  const popupTimeoutRef = useRef(null);
 
-  const displayLikes = (reactionCounts?.Like || 0) + userClicks.Like;
-  const displayLoves = (reactionCounts?.Love || 0) + userClicks.Love;
+  const likeKey = `synccast_liked_${roomCode}`;
+  const loveKey = `synccast_loved_${roomCode}`;
 
-  const handleReactionClick = (type) => {
-    setUserClicks((prev) => ({
-      ...prev,
-      [type]: (prev[type] || 0) + 1,
-    }));
-    const reactionLabel = type === 'Like' ? '👍 Like' : '❤️ Love';
-    onTriggerReaction?.(reactionLabel);
+  const [hasLiked, setHasLiked] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return sessionStorage.getItem(likeKey) === 'true';
+  });
+
+  const [hasLoved, setHasLoved] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return sessionStorage.getItem(loveKey) === 'true';
+  });
+
+  const [popup, setPopup] = useState(null); // { type: 'like' | 'love', text: string }
+
+  const [prevRoomCode, setPrevRoomCode] = useState(roomCode);
+  if (roomCode !== prevRoomCode) {
+    setPrevRoomCode(roomCode);
+    setHasLiked(typeof window !== 'undefined' ? sessionStorage.getItem(`synccast_liked_${roomCode}`) === 'true' : false);
+    setHasLoved(typeof window !== 'undefined' ? sessionStorage.getItem(`synccast_loved_${roomCode}`) === 'true' : false);
+  }
+
+  useEffect(() => {
+    return () => {
+      if (popupTimeoutRef.current) {
+        clearTimeout(popupTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const showPopup = (type, message) => {
+    if (popupTimeoutRef.current) {
+      clearTimeout(popupTimeoutRef.current);
+    }
+    setPopup({ type, text: message });
+    popupTimeoutRef.current = setTimeout(() => {
+      setPopup(null);
+    }, 2200);
+  };
+
+  const handleLike = () => {
+    if (hasLiked) {
+      showPopup('like', 'Already liked! 👍');
+      return;
+    }
+    setHasLiked(true);
+    try {
+      sessionStorage.setItem(likeKey, 'true');
+    } catch {}
+    showPopup('like', 'Liked! 👍');
+    onTriggerReaction?.('👍 Like');
+  };
+
+  const handleLove = () => {
+    if (hasLoved) {
+      showPopup('love', 'Already loved! ❤️');
+      return;
+    }
+    setHasLoved(true);
+    try {
+      sessionStorage.setItem(loveKey, 'true');
+    } catch {}
+    showPopup('love', 'Loved! ❤️');
+    onTriggerReaction?.('❤️ Love');
   };
 
   // Only show real user chat messages (filter out any host/system action logs)
@@ -176,36 +230,71 @@ export function PartyChat({
         )}
       </div>
 
-      {/* 3. Reaction Actions Bar - Only Like and Love with live count badges */}
-      <div className="px-3 py-2 border-t border-white/[0.06] bg-[#07080c] flex items-center gap-2">
+      {/* 3. Reaction Actions Bar - Like & Love with One-time Click, Active Colors & Micro Popup */}
+      <div className="relative px-3 py-2 border-t border-white/[0.06] bg-[#07080c] flex items-center gap-2">
+        {/* Micro Pop-up Notification */}
+        {popup && (
+          <div
+            className={`absolute -top-8.5 z-20 flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-mono font-semibold tracking-wide shadow-xl backdrop-blur-md pointer-events-none animate-popIn ${
+              popup.type === 'like'
+                ? 'left-3 bg-[#0a1628] border border-blue-500/50 text-blue-200 shadow-blue-500/25'
+                : 'left-20 bg-[#240c11] border border-red-500/50 text-red-200 shadow-red-500/25'
+            }`}
+          >
+            <span>{popup.text}</span>
+            {/* Downward pointing caret */}
+            <div
+              className={`absolute -bottom-1 left-4 w-2 h-2 rotate-45 border-r border-b ${
+                popup.type === 'like'
+                  ? 'bg-[#0a1628] border-blue-500/50'
+                  : 'bg-[#240c11] border-red-500/50'
+              }`}
+            />
+          </div>
+        )}
+
         {/* Like Button */}
         <button
           type="button"
-          onClick={() => handleReactionClick('Like')}
-          className="px-2.5 py-1.5 rounded-lg bg-zinc-900/80 hover:bg-zinc-800 border border-white/[0.08] hover:border-blue-500/30 text-zinc-300 hover:text-white transition-all flex items-center gap-1.5 text-xs font-mono cursor-pointer active:scale-95 group shadow-xs"
-          title="Like"
+          onClick={handleLike}
+          className={`px-3 py-1.5 rounded-lg border text-xs font-mono transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 group shadow-xs ${
+            hasLiked
+              ? 'bg-blue-950/60 border-blue-500/60 text-blue-300 shadow-[0_0_12px_rgba(59,130,246,0.3)]'
+              : 'bg-zinc-900/80 hover:bg-zinc-800 border-white/[0.08] hover:border-blue-500/30 text-zinc-300 hover:text-white'
+          }`}
+          title={hasLiked ? 'You liked this stream' : 'Like'}
           aria-label="Like"
         >
-          <ThumbsUp className="w-3.5 h-3.5 text-blue-400 group-hover:scale-110 transition-transform" />
-          <span className="font-medium">Like</span>
-          <span className="ml-0.5 px-1.5 py-0.2 rounded-full bg-blue-500/15 border border-blue-500/30 text-blue-300 text-[11px] font-bold">
-            {displayLikes}
-          </span>
+          <ThumbsUp
+            className={`w-3.5 h-3.5 transition-transform duration-200 ${
+              hasLiked
+                ? 'text-blue-400 fill-blue-500 scale-110'
+                : 'text-zinc-400 group-hover:text-blue-400 group-hover:scale-110'
+            }`}
+          />
+          <span className={`font-medium ${hasLiked ? 'text-blue-300 font-semibold' : ''}`}>Like</span>
         </button>
 
         {/* Love Button */}
         <button
           type="button"
-          onClick={() => handleReactionClick('Love')}
-          className="px-2.5 py-1.5 rounded-lg bg-zinc-900/80 hover:bg-zinc-800 border border-white/[0.08] hover:border-rose-500/30 text-zinc-300 hover:text-white transition-all flex items-center gap-1.5 text-xs font-mono cursor-pointer active:scale-95 group shadow-xs"
-          title="Love"
+          onClick={handleLove}
+          className={`px-3 py-1.5 rounded-lg border text-xs font-mono transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 group shadow-xs ${
+            hasLoved
+              ? 'bg-red-950/60 border-red-500/60 text-red-300 shadow-[0_0_12px_rgba(239,68,68,0.3)]'
+              : 'bg-zinc-900/80 hover:bg-zinc-800 border-white/[0.08] hover:border-red-500/30 text-zinc-300 hover:text-white'
+          }`}
+          title={hasLoved ? 'You loved this stream' : 'Love'}
           aria-label="Love"
         >
-          <Heart className="w-3.5 h-3.5 text-rose-500 fill-rose-500/30 group-hover:scale-110 transition-transform" />
-          <span className="font-medium">Love</span>
-          <span className="ml-0.5 px-1.5 py-0.2 rounded-full bg-rose-500/15 border border-rose-500/30 text-rose-300 text-[11px] font-bold">
-            {displayLoves}
-          </span>
+          <Heart
+            className={`w-3.5 h-3.5 transition-transform duration-200 ${
+              hasLoved
+                ? 'text-red-500 fill-red-500 scale-110'
+                : 'text-zinc-400 group-hover:text-red-400 group-hover:scale-110'
+            }`}
+          />
+          <span className={`font-medium ${hasLoved ? 'text-red-300 font-semibold' : ''}`}>Love</span>
         </button>
       </div>
 

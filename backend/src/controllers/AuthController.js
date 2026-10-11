@@ -1,4 +1,5 @@
 import User from '../models/User.js';
+import UserService from '../services/UserService.js';
 import { generateToken } from '../middleware/authMiddleware.js';
 import { sendSuccess } from '../utils/apiResponse.js';
 import { ApiError } from '../utils/errorResponse.js';
@@ -108,6 +109,32 @@ export class AuthController {
   static async logout(req, res, next) {
     try {
       return sendSuccess(res, 200, 'Logged out successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST /api/auth/sync
+   * Syncs authenticated account information into MongoDB User collection
+   */
+  static async syncUser(req, res, next) {
+    try {
+      const { userId, email, fullName, username } = req.body;
+      if (!userId && !email) {
+        throw ApiError.badRequest('userId or email is required for user sync');
+      }
+
+      const user = await UserService.syncAuthenticatedUser({
+        userId,
+        email,
+        fullName,
+        username,
+      });
+
+      return sendSuccess(res, 200, 'User profile synchronized in MongoDB', {
+        user: user.toClient(),
+      });
     } catch (error) {
       next(error);
     }

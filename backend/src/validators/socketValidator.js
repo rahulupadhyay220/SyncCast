@@ -31,7 +31,7 @@ export const socketChangeVideoSchema = z.object({
 export const socketAssignRoleSchema = z.object({
   roomId: z.string().trim().min(1, 'roomId is required'),
   targetUserId: z.string().trim().min(1, 'targetUserId is required'),
-  newRole: z.enum([ROLES.HOST, ROLES.MODERATOR, ROLES.PARTICIPANT, ROLES.VIEWER], {
+  newRole: z.enum([ROLES.HOST, ROLES.GUEST, ROLES.MODERATOR, ROLES.PARTICIPANT, ROLES.VIEWER], {
     errorMap: () => ({ message: 'Invalid role specified' }),
   }),
 });

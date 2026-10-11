@@ -344,10 +344,13 @@ export const registerRoleHandlers = (io, socket, sessions) => {
       });
 
       // Update in-memory session roles
-      session.role = ROLES.MODERATOR; // Old host downgraded to Moderator
-      for (const [, sess] of sessions.entries()) {
+      session.role = ROLES.GUEST; // Old host downgraded to Guest
+      socket.emit('your_role_updated', { role: ROLES.GUEST });
+
+      for (const [sId, sess] of sessions.entries()) {
         if (sess.userId === newHostId && sess.roomId === roomId) {
           sess.role = ROLES.HOST; // New host upgraded to Host
+          io.to(sId).emit('your_role_updated', { role: ROLES.HOST });
         }
       }
 
@@ -372,6 +375,39 @@ export const registerRoleHandlers = (io, socket, sessions) => {
       logger.info(`Host transferred in room ${roomId}: ${previousHostId} -> ${newHostId}`);
     } catch (err) {
       logger.error(`Error in transfer_host: ${err.message}`);
+      const errResponse = { success: false, error: err.message };
+      if (typeof callback === 'function') callback(errResponse);
+      socket.emit('error', errResponse);
+    }
+  });
+
+  /**
+   * Event: mute_participant
+   * Host toggles mute on participant
+   */
+  socket.on('mute_participant', async (payload, callback) => {
+    try {
+      const session = guard(ACTIONS.MUTE_PARTICIPANT, callback);
+      if (!session) return;
+
+      const roomId = normalizeRoomId(payload?.roomId || session.roomId);
+      const targetUserId = payload?.targetUserId;
+      const isMuted = payload?.isMuted !== false;
+
+      // Broadcast mute event to room and target
+      io.to(roomId).emit('participant_muted', {
+        targetUserId,
+        isMuted,
+        mutedBy: {
+          userId: session.userId,
+          username: session.username,
+        },
+      });
+
+      if (typeof callback === 'function') callback({ success: true, targetUserId, isMuted });
+      logger.info(`Host ${session.username} set mute=${isMuted} for user ${targetUserId} in room ${roomId}`);
+    } catch (err) {
+      logger.error(`Error in mute_participant: ${err.message}`);
       const errResponse = { success: false, error: err.message };
       if (typeof callback === 'function') callback(errResponse);
       socket.emit('error', errResponse);

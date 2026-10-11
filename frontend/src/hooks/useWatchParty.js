@@ -66,6 +66,7 @@ export function useWatchParty() {
   // Moderation & Rejoin states
   const [pendingRejoinRequests, setPendingRejoinRequests] = useState([]);
   const [rejoinStatus, setRejoinStatus] = useState(null); // null | 'pending' | 'approved' | 'rejected'
+  const [sessionEndedNotice, setSessionEndedNotice] = useState(null);
 
   // Simulated role for demo preview: 'Host' | 'Moderator' | 'Participant'
   const [simulatedRole, setSimulatedRole] = useState('Host');
@@ -162,6 +163,26 @@ export function useWatchParty() {
     setTimeout(() => {
       setReactions((prev) => prev.filter((r) => r.id !== id));
     }, 2500);
+  }, []);
+
+  // Session termination eviction helper (Requirement 10)
+  const triggerSessionEnded = useCallback((customMessage) => {
+    const noticeMsg =
+      customMessage ||
+      'This watch session has ended because the Host left the room. Redirecting you to the Home Page.';
+    setSessionEndedNotice(noticeMsg);
+    setVideoState((prev) => ({ ...prev, playing: false }));
+    sessionStorage.setItem(
+      'streamEvictionNotice',
+      JSON.stringify({
+        action: 'stream_ended',
+        message: noticeMsg,
+      })
+    );
+    setTimeout(() => {
+      setIsInRoom(false);
+      window.location.href = '/';
+    }, 1800);
   }, []);
 
   // Real-time synchronization layer: Socket.io (network) + BroadcastChannel (multi-tab local)
@@ -333,6 +354,70 @@ export function useWatchParty() {
               window.location.href = '/';
             }
           }
+        } else if (data.type === 'host_transferred') {
+          const isSelfNewHost =
+            (data.newHostId && (data.newHostId === generatedUserId || data.newHostId === 'user-self')) ||
+            (data.newHostUsername && userName && data.newHostUsername.toLowerCase() === userName.toLowerCase());
+          if (isSelfNewHost) {
+            setSimulatedRole('Host');
+            setIsRoomCreator(true);
+          } else {
+            setSimulatedRole('Participant');
+            setIsRoomCreator(false);
+          }
+          setParticipants((prev) =>
+            prev.map((p) => {
+              const isTarget =
+                p.id === data.newHostId ||
+                (data.newHostUsername && (p.name === data.newHostUsername || p.name === `${data.newHostUsername} (You)`));
+              const isOldHost =
+                p.id === data.oldHostId ||
+                (data.oldHostUsername && (p.name === data.oldHostUsername || p.name === `${data.oldHostUsername} (You)`));
+              if (isTarget) {
+                return { ...p, role: 'Host', avatarColor: 'bg-[#880808]' };
+              }
+              if (isOldHost) {
+                return { ...p, role: 'Participant', avatarColor: 'bg-slate-500' };
+              }
+              return p;
+            })
+          );
+        } else if (data.type === 'role_updated') {
+          const isMatch =
+            (data.targetUserId && (data.targetUserId === generatedUserId || data.targetUserId === 'user-self')) ||
+            (data.targetUsername && userName && data.targetUsername.toLowerCase() === userName.toLowerCase());
+          if (isMatch) {
+            setSimulatedRole(data.newRole);
+          }
+          setParticipants((prev) =>
+            prev.map((p) => {
+              const match =
+                p.id === data.targetUserId ||
+                (data.targetUsername && (p.name === data.targetUsername || p.name === `${data.targetUsername} (You)`));
+              if (match) {
+                return {
+                  ...p,
+                  role: data.newRole,
+                  avatarColor:
+                    data.newRole === 'Host'
+                      ? 'bg-[#880808]'
+                      : data.newRole === 'Moderator'
+                      ? 'bg-indigo-600'
+                      : 'bg-slate-500',
+                };
+              }
+              return p;
+            })
+          );
+        } else if (data.type === 'stream_ended') {
+          triggerSessionEnded(data.message);
+        } else if (data.type === 'mute_participant') {
+          const isMatch =
+            (data.targetUserId && (data.targetUserId === generatedUserId || data.targetUserId === 'user-self')) ||
+            (data.targetUsername && userName && data.targetUsername.toLowerCase() === userName.toLowerCase());
+          if (isMatch) {
+            setIsMuted(true);
+          }
         }
       };
     } catch {
@@ -342,11 +427,18 @@ export function useWatchParty() {
     // Unload cleanup for tab departure
     const handleBeforeUnload = () => {
       try {
-        channel?.postMessage({
-          type: 'peer_leave',
-          id: generatedUserId,
-          name: userName,
-        });
+        if (simulatedRole === 'Host' || isRoomCreator) {
+          channel?.postMessage({
+            type: 'stream_ended',
+            message: 'This watch session has ended because the Host left the room. Redirecting you to the Home Page.',
+          });
+        } else {
+          channel?.postMessage({
+            type: 'peer_leave',
+            id: generatedUserId,
+            name: userName,
+          });
+        }
       } catch { }
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
@@ -595,6 +687,76 @@ export function useWatchParty() {
         }
       });
 
+      socket.on('host_transferred', (data) => {
+        const isSelfNewHost =
+          (data?.newHostId && (data.newHostId === generatedUserId || data.newHostId === user?.id)) ||
+          (data?.newHostUsername && userName && data.newHostUsername.toLowerCase() === userName.toLowerCase());
+        if (isSelfNewHost) {
+          setSimulatedRole('Host');
+          setIsRoomCreator(true);
+        } else {
+          setSimulatedRole('Participant');
+          setIsRoomCreator(false);
+        }
+        setParticipants((prev) =>
+          prev.map((p) => {
+            if (p.id === data?.newHostId || (data?.newHostUsername && p.name.includes(data.newHostUsername))) {
+              return { ...p, role: 'Host', avatarColor: 'bg-[#880808]' };
+            }
+            if (p.id === data?.oldHostId || (data?.oldHostUsername && p.name.includes(data.oldHostUsername))) {
+              return { ...p, role: 'Participant', avatarColor: 'bg-slate-500' };
+            }
+            return p;
+          })
+        );
+      });
+
+      socket.on('stream_ended', (data) => {
+        triggerSessionEnded(data?.message);
+      });
+
+      socket.on('participant_muted', (data) => {
+        if (
+          data?.targetUserId === generatedUserId ||
+          data?.targetUserId === user?.id ||
+          (data?.targetUsername && data.targetUsername.toLowerCase() === userName.toLowerCase())
+        ) {
+          setIsMuted(true);
+        }
+      });
+
+      socket.on('role_updated', (data) => {
+        const normRole =
+          data?.role === 'host' ? 'Host' : data?.role === 'moderator' ? 'Moderator' : 'Participant';
+        if (data?.userId === generatedUserId || (user?.id && data?.userId === user.id)) {
+          setSimulatedRole(normRole);
+        }
+        setParticipants((prev) =>
+          prev.map((p) => {
+            if (p.id === data?.userId) {
+              return {
+                ...p,
+                role: normRole,
+                avatarColor:
+                  normRole === 'Host'
+                    ? 'bg-[#880808]'
+                    : normRole === 'Moderator'
+                    ? 'bg-indigo-600'
+                    : 'bg-slate-500',
+              };
+            }
+            return p;
+          })
+        );
+      });
+
+      socket.on('your_role_updated', (data) => {
+        const newRole = data?.role === 'host' ? 'Host' : data?.role === 'moderator' ? 'Moderator' : 'Participant';
+        setSimulatedRole(newRole);
+        setIsRoomCreator(newRole === 'Host');
+        setParticipants((prev) => prev.map((p) => (p.isSelf ? { ...p, role: newRole } : p)));
+      });
+
       socket.on('connect_error', () => {
         setConnectionStatus('simulated');
       });
@@ -620,7 +782,7 @@ export function useWatchParty() {
         socketRef.current = null;
       }
     };
-  }, [isInRoom, socketUrl, roomCode, userName, simulatedRole, triggerLocalReaction]);
+  }, [isInRoom, socketUrl, roomCode, userName, simulatedRole, isRoomCreator, triggerLocalReaction, triggerSessionEnded, user?.id]);
 
   // Ping jitter simulation for realistic SaaS feel
   useEffect(() => {
@@ -640,12 +802,14 @@ export function useWatchParty() {
 
   // Join party action
   const joinParty = useCallback(({ name, code, initialUrl, title, role = 'Participant', isHost = false }) => {
-    // If not creating the room as Host, role cannot be Host
-    const finalRole = isHost ? 'Host' : (role === 'Host' ? 'Participant' : (role || 'Participant'));
+    // When a user starts a stream or hosts, they become the Host.
+    // When joining an existing room via invite link/code, isHost is false and role is 'Participant'.
+    const isHostRole = Boolean(isHost || role === 'Host');
+    const finalRole = isHostRole ? 'Host' : (role === 'Moderator' ? 'Moderator' : 'Participant');
     const finalName = name?.trim() || signedInName || (finalRole === 'Host' ? 'Host' : 'Participant');
     const finalCode = code?.trim().toUpperCase() || 'SYNC-7729';
 
-    setIsRoomCreator(Boolean(isHost || finalRole === 'Host'));
+    setIsRoomCreator(isHostRole);
 
     // Rule 5 & 6: Blocked participants may never rejoin. Priority rule overrides all.
     if (finalRole !== 'Host' && isParticipantBlocked(finalCode, null, finalName)) {
@@ -694,7 +858,7 @@ export function useWatchParty() {
         name: `${finalName} (You)`,
         role: finalRole,
         isSelf: true,
-        avatarColor: 'bg-[#880808]',
+        avatarColor: finalRole === 'Host' ? 'bg-[#880808]' : finalRole === 'Moderator' ? 'bg-indigo-600' : 'bg-slate-500',
         joinedAt: 'Just now',
         status: 'online',
       },
@@ -703,11 +867,6 @@ export function useWatchParty() {
     setMessages([]);
     return { success: true };
   }, [signedInName]);
-
-  // Leave party
-  const leaveParty = useCallback(() => {
-    setIsInRoom(false);
-  }, []);
 
   // Synced play / pause
   const togglePlay = useCallback(() => {
@@ -914,36 +1073,232 @@ export function useWatchParty() {
     changeVideoUrl(prevVideo.url, prevVideo.title);
   }, [canControlPlayback, videoState.url, videoState.videoId, changeVideoUrl]);
 
-  // Role moderation actions (Host only)
-  const promoteUser = useCallback(
-    (userId) => {
+  // Host Transfer Ownership Logic (RBAC Section 5)
+  const transferHost = useCallback(
+    (targetUserId, targetUsername) => {
       if (!canManageUsers) return;
+      const tUser = targetUsername || participants.find((p) => p.id === targetUserId)?.name?.replace(' (You)', '');
+
+      // Local state update: demote self to Guest, promote target to Host
+      setSimulatedRole('Participant');
+      setIsRoomCreator(false);
       setParticipants((prev) =>
         prev.map((p) => {
-          if (p.id === userId) {
-            return { ...p, role: 'Moderator' };
+          if (p.isSelf) {
+            return { ...p, role: 'Participant', avatarColor: 'bg-slate-500' };
+          }
+          if (p.id === targetUserId || p.name === tUser || p.name === `${tUser} (You)`) {
+            return { ...p, role: 'Host', avatarColor: 'bg-[#880808]' };
           }
           return p;
         })
       );
+
+      // 1. BroadcastChannel across all local tabs
+      broadcastRef.current?.postMessage({
+        type: 'host_transferred',
+        oldHostId: 'user-self',
+        oldHostUsername: userName,
+        newHostId: targetUserId,
+        newHostUsername: tUser,
+      });
+
+      // 2. Socket.io event to real-time room
+      if (socketRef.current?.connected) {
+        socketRef.current.emit('transfer_host', {
+          roomId: roomCode,
+          newHostId: targetUserId,
+        });
+      }
+
+      // 3. REST API to persist in MongoDB Room & RoomParticipant collections
+      fetch(`${socketUrl}/api/rooms/${roomCode}/transfer-host`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          newHostId: targetUserId,
+          requesterId: user?.id || 'user-self',
+        }),
+      }).catch(() => { });
     },
-    [canManageUsers, setParticipants]
+    [canManageUsers, participants, userName, roomCode, socketUrl, user?.id]
   );
 
-  const demoteUser = useCallback(
-    (userId) => {
+  // Mute Participant (RBAC Section 4)
+  const muteUser = useCallback(
+    (targetUserId, targetUsername) => {
       if (!canManageUsers) return;
+      const tUser = targetUsername || participants.find((p) => p.id === targetUserId)?.name?.replace(' (You)', '');
+
+      // 1. BroadcastChannel
+      broadcastRef.current?.postMessage({
+        type: 'mute_participant',
+        targetUserId,
+        targetUsername: tUser,
+      });
+
+      // 2. Socket.io
+      if (socketRef.current?.connected) {
+        socketRef.current.emit('mute_participant', {
+          roomId: roomCode,
+          targetUserId,
+        });
+      }
+    },
+    [canManageUsers, participants, roomCode]
+  );
+
+  // End Stream / Terminate Session (Requirement 10)
+  const endStream = useCallback(() => {
+    if (!canManageUsers) return;
+
+    const terminationMessage =
+      'This watch session has ended because the Host left the room. Redirecting you to the Home Page.';
+
+    // 1. BroadcastChannel across all local tabs
+    broadcastRef.current?.postMessage({
+      type: 'stream_ended',
+      message: terminationMessage,
+    });
+
+    // 2. Socket.io
+    if (socketRef.current?.connected) {
+      socketRef.current.emit('end_stream', {
+        roomId: roomCode,
+      });
+    }
+
+    // 3. REST API to update MongoDB Room (streamStatus = ended) and RoomParticipants
+    fetch(`${socketUrl}/api/rooms/${roomCode}/end`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        requesterId: user?.id || 'user-self',
+      }),
+    }).catch(() => { });
+
+    setIsInRoom(false);
+    sessionStorage.setItem(
+      'streamEvictionNotice',
+      JSON.stringify({
+        action: 'stream_ended',
+        message: 'You have ended the watch party session.',
+      })
+    );
+    window.location.href = '/';
+  }, [canManageUsers, roomCode, socketUrl, user?.id]);
+
+  // Leave Party (Requirement 10: If Host leaves or ends session, room terminates for all participants)
+  const leaveParty = useCallback(() => {
+    if (simulatedRole === 'Host' || isRoomCreator) {
+      endStream();
+    } else {
+      if (socketRef.current?.connected) {
+        socketRef.current.emit('leave_room', {
+          roomId: roomCode,
+          userId: user?.id || 'user-self',
+          username: userName,
+        });
+      }
+      broadcastRef.current?.postMessage({
+        type: 'peer_leave',
+        id: user?.id || 'user-self',
+        name: userName,
+      });
+      setIsInRoom(false);
+    }
+  }, [simulatedRole, isRoomCreator, endStream, roomCode, user?.id, userName]);
+
+  // Promote participant to Moderator (Host only - Requirement 7)
+  const promoteToModerator = useCallback(
+    (userId, targetUsername) => {
+      if (!canManageUsers) return;
+      const tUser = targetUsername || participants.find((p) => p.id === userId)?.name?.replace(' (You)', '');
+
       setParticipants((prev) =>
         prev.map((p) => {
-          if (p.id === userId) {
-            return { ...p, role: 'Participant' };
+          if (p.id === userId || p.name === tUser || p.name === `${tUser} (You)`) {
+            return { ...p, role: 'Moderator', avatarColor: 'bg-indigo-600' };
           }
           return p;
         })
       );
+
+      broadcastRef.current?.postMessage({
+        type: 'role_updated',
+        targetUserId: userId,
+        targetUsername: tUser,
+        newRole: 'Moderator',
+      });
+
+      if (socketRef.current?.connected) {
+        socketRef.current.emit('assign_role', {
+          roomId: roomCode,
+          targetUserId: userId,
+          newRole: 'moderator',
+        });
+      }
+
+      fetch(`${socketUrl}/api/rooms/${roomCode}/assign-role`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          roomId: roomCode,
+          targetUserId: userId,
+          newRole: 'moderator',
+          requesterId: user?.id || 'user-self',
+        }),
+      }).catch(() => {});
     },
-    [canManageUsers, setParticipants]
+    [canManageUsers, participants, roomCode, socketUrl, user?.id]
   );
+
+  // Demote Moderator back to Guest (Host only)
+  const demoteToGuest = useCallback(
+    (userId, targetUsername) => {
+      if (!canManageUsers) return;
+      const tUser = targetUsername || participants.find((p) => p.id === userId)?.name?.replace(' (You)', '');
+
+      setParticipants((prev) =>
+        prev.map((p) => {
+          if (p.id === userId || p.name === tUser || p.name === `${tUser} (You)`) {
+            return { ...p, role: 'Participant', avatarColor: 'bg-slate-500' };
+          }
+          return p;
+        })
+      );
+
+      broadcastRef.current?.postMessage({
+        type: 'role_updated',
+        targetUserId: userId,
+        targetUsername: tUser,
+        newRole: 'Participant',
+      });
+
+      if (socketRef.current?.connected) {
+        socketRef.current.emit('assign_role', {
+          roomId: roomCode,
+          targetUserId: userId,
+          newRole: 'guest',
+        });
+      }
+
+      fetch(`${socketUrl}/api/rooms/${roomCode}/assign-role`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          roomId: roomCode,
+          targetUserId: userId,
+          newRole: 'guest',
+          requesterId: user?.id || 'user-self',
+        }),
+      }).catch(() => {});
+    },
+    [canManageUsers, participants, roomCode, socketUrl, user?.id]
+  );
+
+  const promoteUser = promoteToModerator;
+  const demoteUser = demoteToGuest;
 
   // Moderation: Remove participant (Rule 2)
   const removeUser = useCallback(
@@ -1104,7 +1459,7 @@ export function useWatchParty() {
               }
               try {
                 bc.close();
-              } catch {}
+              } catch { }
             }
           }
         };
@@ -1124,7 +1479,7 @@ export function useWatchParty() {
               setRejoinStatus('approved');
               window.removeEventListener('storage', handleStorageChange);
             }
-          } catch {}
+          } catch { }
         }
       };
       window.addEventListener('storage', handleStorageChange);
@@ -1209,6 +1564,7 @@ export function useWatchParty() {
     userName,
     joinParty,
     leaveParty,
+    sessionEndedNotice,
 
     // Role state
     simulatedRole,
@@ -1234,6 +1590,11 @@ export function useWatchParty() {
 
     // Participants & moderation
     participants,
+    transferHost,
+    muteUser,
+    endStream,
+    promoteToModerator,
+    demoteToGuest,
     promoteUser,
     demoteUser,
     kickUser,
