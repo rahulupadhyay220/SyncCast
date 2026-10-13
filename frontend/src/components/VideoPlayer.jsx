@@ -61,7 +61,12 @@ export function VideoPlayer({
   const currentVideoId =
     videoState.videoId ||
     extractYouTubeVideoId(videoState.url) ||
-    'jfKfPfyJRdk';
+    'Y-rmzh0PI3c';
+
+  // Clear player error whenever video source changes
+  useEffect(() => {
+    setPlayerError(null);
+  }, [videoState.videoId, videoState.url]);
 
   // Reset and restart the 3-second mouse inactivity countdown
   const resetInactivityTimer = useCallback(() => {
@@ -411,8 +416,8 @@ export function VideoPlayer({
         onTouchStart={resetInactivityTimer}
         style={{ cursor: isFullscreen && !showControls ? 'none' : undefined }}
         className={`relative w-full ${isFullscreen
-            ? 'h-full aspect-auto rounded-none border-0'
-            : 'aspect-video rounded-xl border border-white/[0.08]'
+          ? 'h-full aspect-auto rounded-none border-0'
+          : 'aspect-video rounded-xl border border-white/[0.08]'
           } bg-black overflow-hidden shadow-2xl group transition-all select-none ${isFullscreen && !showControls ? 'cursor-none' : ''
           }`}
       >
@@ -507,8 +512,8 @@ export function VideoPlayer({
         {/* Bottom Minimal HUD Control Bar */}
         <div
           className={`absolute bottom-0 inset-x-0 p-2 sm:p-4 bg-gradient-to-t from-black/95 via-black/60 to-transparent transition-all duration-300 z-30 ${showControls
-              ? 'opacity-100 translate-y-0 pointer-events-auto'
-              : 'opacity-0 translate-y-3 pointer-events-none'
+            ? 'opacity-100 translate-y-0 pointer-events-auto'
+            : 'opacity-0 translate-y-3 pointer-events-none'
             }`}
         >
           <div className="bg-[#050608]/90 backdrop-blur-md rounded-xl border border-white/[0.08] p-2 sm:p-3 text-white">
@@ -551,8 +556,8 @@ export function VideoPlayer({
                   onClick={onTogglePlay}
                   disabled={!canControl}
                   className={`p-1.5 rounded-lg transition-all cursor-pointer ${canControl
-                      ? 'bg-zinc-100 hover:bg-white text-zinc-950 active:scale-95'
-                      : 'bg-zinc-900 text-zinc-600 cursor-not-allowed'
+                    ? 'bg-zinc-100 hover:bg-white text-zinc-950 active:scale-95'
+                    : 'bg-zinc-900 text-zinc-600 cursor-not-allowed'
                     }`}
                   title={canControl ? (videoState.playing ? 'Pause' : 'Play') : 'Host control only'}
                 >

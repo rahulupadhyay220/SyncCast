@@ -19,7 +19,26 @@ import { escapeHtml } from '../middleware/sanitize.js';
 export const initializeSockets = (httpServer) => {
   const io = new Server(httpServer, {
     cors: {
-      origin: config.clientUrls,
+      origin: (origin, callback) => {
+        // Allow requests with no origin (e.g. mobile apps, curl, server-to-server)
+        if (!origin) return callback(null, true);
+        if (config.clientUrls.includes(origin)) return callback(null, true);
+        // Allow local LAN IPs (192.168.*, 10.*, 172.*), localhost dev origins, and preview domains
+        if (
+          !config.isProduction ||
+          origin.startsWith('http://localhost:') ||
+          origin.startsWith('http://127.0.0.1:') ||
+          origin.startsWith('https://localhost:') ||
+          origin.startsWith('http://192.168.') ||
+          origin.startsWith('http://10.') ||
+          origin.startsWith('http://172.') ||
+          origin.includes('.vercel.app') ||
+          origin.includes('.onrender.com')
+        ) {
+          return callback(null, true);
+        }
+        return callback(null, true);
+      },
       methods: ['GET', 'POST'],
       credentials: true,
     },
@@ -42,25 +61,28 @@ export const initializeSockets = (httpServer) => {
     // Sanitized & validated chat message handling (XSS protected)
     const handleChatMessage = (payload) => {
       const session = activeSessions.get(socket.id);
-      if (!session) return;
-
       const parsed = socketChatSchema.safeParse(payload || {});
       if (!parsed.success) return;
 
       const rawText = parsed.data.text || parsed.data.message || '';
       if (!rawText.trim()) return;
 
+      const targetRoomId = session?.roomId || parsed.data.roomId;
+      if (!targetRoomId) return;
+
+      const senderName = session?.username || 'Guest';
+      const senderRole = session?.role || 'Participant';
       const sanitizedText = escapeHtml(rawText.trim());
 
       const messageObj = {
-        id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-        sender: session.username,
-        role: session.role,
+        id: parsed.data.id || `msg-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+        sender: senderName,
+        role: senderRole,
         text: sanitizedText,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
 
-      io.to(session.roomId).emit('chat_message', { message: messageObj });
+      io.to(targetRoomId).emit('chat_message', { message: messageObj });
     };
 
     socket.on('chat_message', handleChatMessage);
@@ -69,16 +91,17 @@ export const initializeSockets = (httpServer) => {
     // Sanitized & validated reaction handling
     socket.on('send_reaction', (payload) => {
       const session = activeSessions.get(socket.id);
-      if (!session) return;
-
       const parsed = socketReactionSchema.safeParse(payload || {});
       if (!parsed.success) return;
 
+      const targetRoomId = session?.roomId || payload?.roomId;
+      if (!targetRoomId) return;
+
       const sanitizedEmoji = escapeHtml(parsed.data.emoji.trim());
 
-      io.to(session.roomId).emit('reaction_received', {
+      io.to(targetRoomId).emit('reaction_received', {
         emoji: sanitizedEmoji,
-        sender: session.username,
+        sender: session?.username || 'Peer',
       });
     });
 

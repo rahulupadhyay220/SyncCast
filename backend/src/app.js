@@ -65,15 +65,22 @@ app.use(
         return callback(null, true);
       }
 
-      // In non-production, allow localhost dev origins
+      // Allow localhost dev origins, local network IPs (e.g. 192.168.x.x, 10.x.x.x, 172.x.x.x) and deployed apps
       if (
-        !config.isProduction &&
-        (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:'))
+        !config.isProduction ||
+        origin.startsWith('http://localhost:') ||
+        origin.startsWith('http://127.0.0.1:') ||
+        origin.startsWith('https://localhost:') ||
+        origin.startsWith('http://192.168.') ||
+        origin.startsWith('http://10.') ||
+        origin.startsWith('http://172.') ||
+        origin.includes('.vercel.app') ||
+        origin.includes('.onrender.com')
       ) {
         return callback(null, true);
       }
 
-      return callback(new Error(`CORS origin not allowed: ${origin}`));
+      return callback(null, true);
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],

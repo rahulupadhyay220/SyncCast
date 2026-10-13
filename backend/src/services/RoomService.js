@@ -1,8 +1,10 @@
+import mongoose from 'mongoose';
 import Room from '../models/Room.js';
 import RoomParticipant from '../models/RoomParticipant.js';
 import { ROLES } from '../config/permissions.js';
 import { ApiError } from '../utils/errorResponse.js';
 import { generateRoomCode, normalizeRoomId } from '../utils/roomCodeGenerator.js';
+import { isDatabaseConnected } from '../database/connection.js';
 import logger from '../utils/logger.js';
 
 export class RoomService {
@@ -18,22 +20,54 @@ export class RoomService {
    * @param {string} [params.initialVideoTitle]
    * @param {boolean} [params.isPublic]
    */
+  static inMemoryRooms = new Map();
+
+  /**
+   * Creates a new Watch-Party room.
+   * Creator automatically becomes the Host.
+   * 
+   * @param {object} params
+   * @param {string} [params.roomName]
+   * @param {string} params.hostId
+   * @param {string} params.username
+   * @param {string} [params.initialVideoId]
+   * @param {string} [params.initialVideoTitle]
+   * @param {boolean} [params.isPublic]
+   * @param {string} [params.roomId]
+   */
   static async createRoom({
     roomName = 'SyncCast Watch Theater',
     hostId,
     username,
-    initialVideoId = 'jfKfPfyJRdk',
-    initialVideoTitle = 'Lofi Girl - beats to relax/study to',
+    initialVideoId = 'Y-rmzh0PI3c',
+    initialVideoTitle = 'Blender Studio: Cosmos Laundromat',
     isPublic = true,
+    roomId: requestedRoomId = null,
   }) {
-    // Generate unique room code (e.g. SYNC-7729)
-    let roomId = generateRoomCode();
-    let collision = await Room.findOne({ roomId });
-    let attempts = 0;
-    while (collision && attempts < 5) {
-      roomId = generateRoomCode();
-      collision = await Room.findOne({ roomId });
-      attempts++;
+    // Generate or normalize room code (e.g. SYNC-7729)
+    let roomId = requestedRoomId ? normalizeRoomId(requestedRoomId) : generateRoomCode();
+
+    if (!isDatabaseConnected() || mongoose.connection.readyState !== 1) {
+      const memRes = RoomService.joinRoomInMemory({
+        roomId,
+        userId: hostId,
+        username,
+        role: ROLES.HOST,
+        isHost: true,
+        initialVideoId,
+        initialVideoTitle,
+      });
+      return memRes.room;
+    }
+
+    if (!requestedRoomId) {
+      let collision = await Room.findOne({ roomId });
+      let attempts = 0;
+      while (collision && attempts < 5) {
+        roomId = generateRoomCode();
+        collision = await Room.findOne({ roomId });
+        attempts++;
+      }
     }
 
     const hostParticipant = {
@@ -88,8 +122,8 @@ export class RoomService {
   }
 
   /**
-   * Joins an existing room.
-   * User becomes Participant by default (unless user is already the host).
+   * Joins an existing room or auto-creates room if host joins new code.
+   * User becomes Participant by default (unless user is the host).
    * 
    * @param {object} params
    * @param {string} params.roomId
@@ -97,13 +131,98 @@ export class RoomService {
    * @param {string} params.username
    * @param {string} [params.socketId]
    * @param {string} [params.role]
+   * @param {boolean} [params.isHost]
+   * @param {string} [params.initialVideoId]
+   * @param {string} [params.initialVideoTitle]
+   * @param {number} [params.currentTime]
+   * @param {string} [params.playbackState]
    */
-  static async joinRoom({ roomId, userId, username, socketId = null, role = null }) {
+  static async joinRoom({
+    roomId,
+    userId,
+    username,
+    socketId = null,
+    role = null,
+    isHost = false,
+    initialVideoId = 'Y-rmzh0PI3c',
+    initialVideoTitle = 'Blender Studio: Cosmos Laundromat',
+    currentTime = 0,
+    playbackState = 'paused',
+  }) {
     const normalizedId = normalizeRoomId(roomId);
-    const room = await Room.findOne({ roomId: normalizedId });
+
+    if (!isDatabaseConnected() || mongoose.connection.readyState !== 1) {
+      return RoomService.joinRoomInMemory({
+        roomId: normalizedId,
+        userId,
+        username,
+        socketId,
+        role,
+        isHost,
+        initialVideoId,
+        initialVideoTitle,
+        currentTime,
+        playbackState,
+      });
+    }
+
+    let room = await Room.findOne({ roomId: normalizedId });
 
     if (!room) {
-      throw ApiError.notFound(`Room with code '${roomId}' was not found`);
+      // AUTO-CREATE ROOM IF IT DOES NOT EXIST YET:
+      // When host creates room or enters with a generated code, persist the room in DB immediately
+      const isCreator = Boolean(isHost || role === 'Host' || role === 'host');
+      const assignedRole = isCreator ? ROLES.HOST : ROLES.GUEST;
+
+      const hostParticipant = {
+        userId,
+        username,
+        socketId,
+        role: assignedRole,
+        joinedAt: new Date(),
+        isActive: true,
+      };
+
+      room = new Room({
+        roomId: normalizedId,
+        roomCode: normalizedId,
+        roomName: `${username}'s Watch Stream`,
+        hostId: userId,
+        currentHostId: userId,
+        streamStatus: playbackState === 'playing' ? 'live' : 'paused',
+        createdDate: new Date(),
+        currentVideoId: initialVideoId || 'Y-rmzh0PI3c',
+        currentVideoTitle: initialVideoTitle || 'Blender Studio: Cosmos Laundromat',
+        currentTime: typeof currentTime === 'number' ? currentTime : 0,
+        playbackState: playbackState || 'paused',
+        lastActionTimestamp: Date.now(),
+        isPublic: true,
+        participants: [hostParticipant],
+      });
+
+      await room.save();
+
+      try {
+        await RoomParticipant.findOneAndUpdate(
+          { roomId: normalizedId, userId },
+          {
+            userId,
+            roomId: normalizedId,
+            username,
+            role: assignedRole,
+            joinTime: new Date(),
+            leaveTime: null,
+            status: 'active',
+            socketId,
+          },
+          { upsert: true, new: true }
+        );
+      } catch (err) {
+        logger.warn(`Failed to save initial RoomParticipant record: ${err.message}`);
+      }
+
+      logger.info(`Auto-created room '${normalizedId}' on join by ${username} (${userId}) as ${assignedRole}`);
+      return { room, role: assignedRole, isRemoved: false, requiresApproval: false };
     }
 
     // 1. Check if user is blocked from this room (Blocked overrides all)
@@ -126,10 +245,12 @@ export class RoomService {
     }
 
     // Check if user is the designated host of this room
-    const isRoomHost = (room.hostId === userId || room.currentHostId === userId);
+    const isRoomHost = (room.hostId === userId || room.currentHostId === userId || (isHost && room.participants.length === 0));
 
     // Check if participant already exists in room
-    const existingIndex = room.participants.findIndex((p) => p.userId === userId);
+    const existingIndex = room.participants.findIndex(
+      (p) => p.userId === userId || (username && p.username && p.username.toLowerCase() === username.toLowerCase())
+    );
 
     let assignedRole = isRoomHost ? ROLES.HOST : ROLES.GUEST;
 
@@ -143,6 +264,7 @@ export class RoomService {
         // Enforce Guest/Participant for all non-hosts
         assignedRole = ROLES.GUEST;
       }
+      existing.userId = userId;
       existing.role = assignedRole;
       existing.username = username;
       existing.socketId = socketId || existing.socketId;
@@ -188,15 +310,95 @@ export class RoomService {
   }
 
   /**
+   * Resilient in-memory fallback if MongoDB connection is temporarily unavailable.
+   */
+  static joinRoomInMemory({
+    roomId,
+    userId,
+    username,
+    socketId = null,
+    role = null,
+    isHost = false,
+    initialVideoId = 'Y-rmzh0PI3c',
+    initialVideoTitle = 'Blender Studio: Cosmos Laundromat',
+    currentTime = 0,
+    playbackState = 'paused',
+  }) {
+    const normalizedId = normalizeRoomId(roomId);
+    let memRoom = RoomService.inMemoryRooms.get(normalizedId);
+    const assignedRole = (isHost || role === 'Host') ? ROLES.HOST : (memRoom ? ROLES.GUEST : ROLES.HOST);
+
+    if (!memRoom) {
+      memRoom = {
+        roomId: normalizedId,
+        roomCode: normalizedId,
+        roomName: `${username}'s Watch Stream`,
+        hostId: userId,
+        currentHostId: userId,
+        streamStatus: playbackState === 'playing' ? 'live' : 'paused',
+        currentVideoId: initialVideoId || 'Y-rmzh0PI3c',
+        currentVideoTitle: initialVideoTitle || 'Blender Studio: Cosmos Laundromat',
+        currentTime: typeof currentTime === 'number' ? currentTime : 0,
+        playbackState: playbackState || 'paused',
+        participants: [
+          { userId, username, socketId, role: assignedRole, joinedAt: new Date(), isActive: true }
+        ],
+        toRoomState() {
+          return {
+            roomId: this.roomId,
+            roomCode: this.roomCode,
+            roomName: this.roomName,
+            hostId: this.hostId,
+            currentHostId: this.currentHostId,
+            streamStatus: this.streamStatus,
+            currentVideoId: this.currentVideoId,
+            currentVideoTitle: this.currentVideoTitle,
+            currentTime: this.currentTime,
+            playbackState: this.playbackState,
+            participants: this.participants.filter((p) => p.isActive),
+          };
+        },
+      };
+      RoomService.inMemoryRooms.set(normalizedId, memRoom);
+    } else {
+      const idx = memRoom.participants.findIndex((p) => p.userId === userId || p.username === username);
+      if (idx !== -1) {
+        memRoom.participants[idx].userId = userId;
+        memRoom.participants[idx].socketId = socketId;
+        memRoom.participants[idx].isActive = true;
+      } else {
+        memRoom.participants.push({
+          userId,
+          username,
+          socketId,
+          role: assignedRole,
+          joinedAt: new Date(),
+          isActive: true,
+        });
+      }
+    }
+    logger.info(`[InMemory] User ${username} (${userId}) joined room ${normalizedId} as ${assignedRole}`);
+    return { room: memRoom, role: assignedRole, isRemoved: false, requiresApproval: false };
+  }
+
+  /**
    * Retrieves current room state with frame-accurate timestamp.
    * 
    * @param {string} roomId 
    */
   static async getRoomById(roomId) {
     const normalizedId = normalizeRoomId(roomId);
+
+    if (!isDatabaseConnected() || mongoose.connection.readyState !== 1) {
+      const memRoom = RoomService.inMemoryRooms.get(normalizedId);
+      if (memRoom) return memRoom;
+    }
+
     const room = await Room.findOne({ roomId: normalizedId });
 
     if (!room) {
+      const memRoom = RoomService.inMemoryRooms.get(normalizedId);
+      if (memRoom) return memRoom;
       throw ApiError.notFound(`Room with code '${roomId}' was not found`);
     }
 

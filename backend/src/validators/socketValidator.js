@@ -5,6 +5,12 @@ export const socketJoinRoomSchema = z.object({
   roomId: z.string().trim().min(1, 'roomId is required'),
   userId: z.string().trim().min(1, 'userId is required'),
   username: z.string().trim().min(1, 'username is required').max(50),
+  role: z.string().optional(),
+  isHost: z.boolean().optional(),
+  initialVideoId: z.string().optional(),
+  initialVideoTitle: z.string().optional(),
+  currentTime: z.number().optional(),
+  playbackState: z.string().optional(),
 });
 
 export const socketPlayVideoSchema = z.object({
@@ -62,6 +68,7 @@ export const socketChatSchema = z.object({
   roomId: z.string().trim().optional(),
   text: z.string().trim().min(1).max(1000).optional(),
   message: z.string().trim().min(1).max(1000).optional(),
+  id: z.string().optional(),
 });
 
 export const socketReactionSchema = z.object({

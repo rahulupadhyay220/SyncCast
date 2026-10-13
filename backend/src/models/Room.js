@@ -138,12 +138,12 @@ const roomSchema = new mongoose.Schema(
     },
     currentVideoId: {
       type: String,
-      default: 'jfKfPfyJRdk', // Default YouTube video ID (Lofi Girl)
+      default: 'Y-rmzh0PI3c', // Default YouTube video ID (Blender Studio: Cosmos Laundromat, 100% embeddable)
       trim: true,
     },
     currentVideoTitle: {
       type: String,
-      default: 'Lofi Girl - beats to relax/study to',
+      default: 'Blender Studio: Cosmos Laundromat',
       trim: true,
     },
     currentTime: {

@@ -32,16 +32,50 @@ export const registerRoomHandlers = (io, socket, sessions) => {
         return;
       }
 
-      const { roomId, userId, username } = parsed.data;
-      const normalizedRoomId = normalizeRoomId(roomId);
-
-      // Join DB Room roster & record socket
-      const joinResult = await RoomService.joinRoom({
-        roomId: normalizedRoomId,
+      const {
+        roomId,
         userId,
         username,
-        socketId: socket.id,
-      });
+        role: reqRole,
+        isHost,
+        initialVideoId,
+        initialVideoTitle,
+        currentTime,
+        playbackState,
+      } = parsed.data;
+      const normalizedRoomId = normalizeRoomId(roomId);
+
+      // Join DB Room roster & record socket (with in-memory fallback)
+      let joinResult;
+      try {
+        joinResult = await RoomService.joinRoom({
+          roomId: normalizedRoomId,
+          userId,
+          username,
+          socketId: socket.id,
+          role: reqRole,
+          isHost,
+          initialVideoId,
+          initialVideoTitle,
+          currentTime,
+          playbackState,
+        });
+      } catch (dbErr) {
+        if (dbErr.isBlocked) throw dbErr;
+        logger.warn(`Database join failed, falling back to in-memory room: ${dbErr.message}`);
+        joinResult = RoomService.joinRoomInMemory({
+          roomId: normalizedRoomId,
+          userId,
+          username,
+          socketId: socket.id,
+          role: reqRole,
+          isHost,
+          initialVideoId,
+          initialVideoTitle,
+          currentTime,
+          playbackState,
+        });
+      }
 
       // CASE 1: User was previously removed from room -> requires Host confirmation
       if (joinResult.isRemoved && joinResult.requiresApproval) {
@@ -77,8 +111,12 @@ export const registerRoomHandlers = (io, socket, sessions) => {
 
       const { room, role } = joinResult;
 
-      // Update User in DB
-      await UserService.upsertUser({ userId, username, socketId: socket.id });
+      // Update User in DB if available
+      try {
+        await UserService.upsertUser({ userId, username, socketId: socket.id });
+      } catch {
+        // Non-fatal, continue with real-time sync
+      }
 
       // Join Socket.io room channel
       socket.join(normalizedRoomId);
@@ -92,7 +130,7 @@ export const registerRoomHandlers = (io, socket, sessions) => {
         role,
       });
 
-      const roomState = room.toRoomState();
+      const roomState = room.toRoomState ? room.toRoomState() : room;
 
       // NEW USER JOIN FLOW:
       // Backend immediately sends full room state so frontend syncs player instantly

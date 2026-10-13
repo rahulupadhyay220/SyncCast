@@ -11,14 +11,8 @@ import {
   removeRemovedParticipant,
 } from '../utils/moderation';
 
-// Default curated YouTube sample streams / videos
+// Default curated YouTube sample streams / videos (100% embeddable Creative Commons / open streams)
 export const SAMPLE_VIDEOS = [
-  {
-    title: 'Lofi Girl - beats to relax/study to',
-    url: 'https://www.youtube.com/watch?v=jfKfPfyJRdk',
-    category: 'Live Chill Music',
-    badge: 'Trending Live',
-  },
   {
     title: 'Blender Studio: Cosmos Laundromat',
     url: 'https://www.youtube.com/watch?v=Y-rmzh0PI3c',
@@ -37,7 +31,34 @@ export const SAMPLE_VIDEOS = [
     category: 'Cinematic Cinema',
     badge: 'Ultra HD',
   },
+  {
+    title: 'Big Buck Bunny (Blender Animation)',
+    url: 'https://www.youtube.com/watch?v=aqz-KE-bpKQ',
+    category: 'Open Movie',
+    badge: 'Classic 4K',
+  },
 ];
+
+export function getBackendUrl() {
+  const envUrl = import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_SOCKET_URL;
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname;
+    // When accessing from mobile on a local LAN IP (e.g. 192.168.x.x),
+    // route to the same host IP instead of localhost so mobile connects to backend
+    if (host && host !== 'localhost' && host !== '127.0.0.1') {
+      if (envUrl && (envUrl.includes('localhost') || envUrl.includes('127.0.0.1'))) {
+        try {
+          const parsed = new URL(envUrl);
+          parsed.hostname = host;
+          return parsed.origin;
+        } catch {
+          return `http://${host}:8080`;
+        }
+      }
+    }
+  }
+  return envUrl || 'http://localhost:8080';
+}
 
 const INITIAL_PARTICIPANTS = [
   {
@@ -54,7 +75,7 @@ const INITIAL_PARTICIPANTS = [
 const INITIAL_MESSAGES = [];
 
 export function useWatchParty() {
-  const socketUrl = import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_SOCKET_URL || 'https://synccast-ens9.onrender.com';
+  const socketUrl = getBackendUrl();
   const { user } = useAuth();
   const signedInName = getUserDisplayName(user);
 
@@ -98,7 +119,7 @@ export function useWatchParty() {
   const broadcastRef = useRef(null);
 
   // Video state
-  const initialVideoId = extractYouTubeVideoId(SAMPLE_VIDEOS[0].url) || 'jfKfPfyJRdk';
+  const initialVideoId = extractYouTubeVideoId(SAMPLE_VIDEOS[0].url) || 'Y-rmzh0PI3c';
   const [videoState, setVideoState] = useState({
     url: SAMPLE_VIDEOS[0].url,
     videoId: initialVideoId,
@@ -402,8 +423,8 @@ export function useWatchParty() {
                     data.newRole === 'Host'
                       ? 'bg-[#880808]'
                       : data.newRole === 'Moderator'
-                      ? 'bg-indigo-600'
-                      : 'bg-slate-500',
+                        ? 'bg-indigo-600'
+                        : 'bg-slate-500',
                 };
               }
               return p;
@@ -456,11 +477,17 @@ export function useWatchParty() {
 
       socket.on('connect', () => {
         setConnectionStatus('connected');
-        // Join backend room
+        // Join backend room with room context
         socket.emit('join_room', {
           roomId: roomCode,
           userId: generatedUserId,
           username: userName,
+          role: simulatedRole,
+          isHost: isRoomCreator || simulatedRole === 'Host',
+          initialVideoId: videoState.videoId,
+          initialVideoTitle: videoState.title,
+          currentTime: videoState.playedSeconds || 0,
+          playbackState: videoState.playing ? 'playing' : 'paused',
         });
       });
 
@@ -474,7 +501,7 @@ export function useWatchParty() {
             url: formatted,
             title: data.currentVideoTitle || prev.title,
             playing: data.playbackState === 'playing',
-            playedSeconds: data.currentTime || 0,
+            playedSeconds: typeof data.currentTime === 'number' ? data.currentTime : (prev.playedSeconds || 0),
           }));
         }
         if (Array.isArray(data.participants) && data.participants.length > 0) {
@@ -484,7 +511,7 @@ export function useWatchParty() {
               name: p.username === userName ? `${p.username} (You)` : p.username,
               role: p.role || 'Participant',
               isSelf: p.username === userName,
-              avatarColor: p.role === 'Host' ? 'bg-[#880808]' : 'bg-slate-500',
+              avatarColor: p.role === 'Host' ? 'bg-[#880808]' : (p.role === 'Moderator' ? 'bg-indigo-600' : 'bg-slate-500'),
               joinedAt: 'Joined',
               status: 'online',
             }))
@@ -504,12 +531,20 @@ export function useWatchParty() {
                 name: data.participant.username,
                 role: data.participant.role || 'Participant',
                 isSelf: data.participant.username === userName,
-                avatarColor: data.participant.role === 'Host' ? 'bg-[#880808]' : 'bg-slate-500',
+                avatarColor: data.participant.role === 'Host' ? 'bg-[#880808]' : (data.participant.role === 'Moderator' ? 'bg-indigo-600' : 'bg-slate-500'),
                 joinedAt: 'Just now',
                 status: 'online',
               },
             ];
           });
+          const joinNotice = {
+            id: `sys-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+            type: 'system',
+            sender: 'System',
+            text: `${data.participant.username} joined the stream.`,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          };
+          setMessages((prev) => [...prev, joinNotice]);
         }
       });
 
@@ -614,11 +649,22 @@ export function useWatchParty() {
               name: p.username === userName ? `${p.username} (You)` : p.username,
               role: p.role || 'Participant',
               isSelf: p.username === userName,
-              avatarColor: p.role === 'Host' ? 'bg-[#880808]' : 'bg-slate-500',
+              avatarColor: p.role === 'Host' ? 'bg-[#880808]' : (p.role === 'Moderator' ? 'bg-indigo-600' : 'bg-slate-500'),
               joinedAt: 'Joined',
               status: 'online',
             }))
           );
+        }
+        if (data?.currentVideoId && !canControlPlayback) {
+          const formatted = formatYouTubeUrl(data.currentVideoId) || data.currentVideoId;
+          setVideoState((prev) => ({
+            ...prev,
+            videoId: data.currentVideoId,
+            url: formatted,
+            title: data.currentVideoTitle || prev.title,
+            playing: data.playbackState === 'playing',
+            playedSeconds: typeof data.currentTime === 'number' ? data.currentTime : prev.playedSeconds,
+          }));
         }
       });
 
@@ -673,9 +719,17 @@ export function useWatchParty() {
       });
 
       socket.on('chat_message', (payload) => {
-        if (payload.message) {
+        if (payload?.message) {
           setMessages((prev) => {
             if (prev.some((m) => m.id === payload.message.id)) return prev;
+            // Deduplicate if recent message with same sender and text
+            const duplicateRecent = prev.some(
+              (m) =>
+                m.sender === payload.message.sender &&
+                m.text === payload.message.text &&
+                Math.abs(Date.now() - (parseInt(m.id?.split('-')?.[1], 10) || 0)) < 3000
+            );
+            if (duplicateRecent) return prev;
             return [...prev, payload.message];
           });
         }
@@ -741,8 +795,8 @@ export function useWatchParty() {
                   normRole === 'Host'
                     ? 'bg-[#880808]'
                     : normRole === 'Moderator'
-                    ? 'bg-indigo-600'
-                    : 'bg-slate-500',
+                      ? 'bg-indigo-600'
+                      : 'bg-slate-500',
               };
             }
             return p;
@@ -865,8 +919,26 @@ export function useWatchParty() {
     ]);
 
     setMessages([]);
+
+    if (isHostRole) {
+      const vidId = initialUrl ? extractYouTubeVideoId(initialUrl) : 'Y-rmzh0PI3c';
+      fetch(`${socketUrl}/api/rooms/create`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          roomName: `${finalName}'s Watch Stream`,
+          hostId: user?.id || `host-${Date.now()}`,
+          username: finalName,
+          initialVideoId: vidId || 'Y-rmzh0PI3c',
+          initialVideoTitle: title || 'Blender Studio: Cosmos Laundromat',
+          isPublic: true,
+          roomId: finalCode,
+        }),
+      }).catch(() => { });
+    }
+
     return { success: true };
-  }, [signedInName]);
+  }, [signedInName, socketUrl, user?.id]);
 
   // Synced play / pause
   const togglePlay = useCallback(() => {
@@ -1248,7 +1320,7 @@ export function useWatchParty() {
           newRole: 'moderator',
           requesterId: user?.id || 'user-self',
         }),
-      }).catch(() => {});
+      }).catch(() => { });
     },
     [canManageUsers, participants, roomCode, socketUrl, user?.id]
   );
@@ -1292,7 +1364,7 @@ export function useWatchParty() {
           newRole: 'guest',
           requesterId: user?.id || 'user-self',
         }),
-      }).catch(() => {});
+      }).catch(() => { });
     },
     [canManageUsers, participants, roomCode, socketUrl, user?.id]
   );
@@ -1500,8 +1572,9 @@ export function useWatchParty() {
   const sendChatMessage = useCallback(
     (text) => {
       if (!text || !text.trim()) return;
+      const msgId = `msg-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
       const newMsg = {
-        id: `msg-${Date.now()}`,
+        id: msgId,
         type: 'chat',
         sender: userName,
         role: simulatedRole,
@@ -1515,6 +1588,7 @@ export function useWatchParty() {
         socketRef.current.emit('send_chat', {
           roomId: roomCode,
           message: text.trim(),
+          id: msgId,
         });
       }
 

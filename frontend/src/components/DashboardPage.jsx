@@ -110,7 +110,7 @@ export function DashboardPage({
       percent: 100,
       hostName: signedInName ? `${signedInName} (You)` : (userName ? `${userName} (You)` : 'You (Host)'),
       viewersCount: 26,
-      url: 'https://www.youtube.com/watch?v=jfKfPfyJRdk',
+      url: 'https://www.youtube.com/watch?v=4xDzrJKXOOY',
       badge: 'Live Lounge',
     },
     {

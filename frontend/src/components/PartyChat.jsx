@@ -74,7 +74,7 @@ export function PartyChat({
     setHasLiked(true);
     try {
       sessionStorage.setItem(likeKey, 'true');
-    } catch {}
+    } catch { }
     showPopup('like', 'Liked! 👍');
     onTriggerReaction?.('👍 Like');
   };
@@ -87,7 +87,7 @@ export function PartyChat({
     setHasLoved(true);
     try {
       sessionStorage.setItem(loveKey, 'true');
-    } catch {}
+    } catch { }
     showPopup('love', 'Loved! ❤️');
     onTriggerReaction?.('❤️ Love');
   };
@@ -162,9 +162,8 @@ export function PartyChat({
             return (
               <div key={msg.id} className="flex items-start gap-2 text-xs animate-fadeIn">
                 <div
-                  className={`w-6 h-6 rounded-md flex items-center justify-center font-bold text-[9px] shrink-0 text-white font-mono ${
-                    msg.avatarColor || getAvatarColor(msg.sender)
-                  }`}
+                  className={`w-6 h-6 rounded-md flex items-center justify-center font-bold text-[9px] shrink-0 text-white font-mono ${msg.avatarColor || getAvatarColor(msg.sender)
+                    }`}
                 >
                   {getInitials(msg.sender)}
                 </div>
@@ -235,20 +234,18 @@ export function PartyChat({
         {/* Micro Pop-up Notification */}
         {popup && (
           <div
-            className={`absolute -top-8.5 z-20 flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-mono font-semibold tracking-wide shadow-xl backdrop-blur-md pointer-events-none animate-popIn ${
-              popup.type === 'like'
+            className={`absolute -top-8.5 z-20 flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-mono font-semibold tracking-wide shadow-xl backdrop-blur-md pointer-events-none animate-popIn ${popup.type === 'like'
                 ? 'left-3 bg-[#0a1628] border border-blue-500/50 text-blue-200 shadow-blue-500/25'
                 : 'left-20 bg-[#240c11] border border-red-500/50 text-red-200 shadow-red-500/25'
-            }`}
+              }`}
           >
             <span>{popup.text}</span>
             {/* Downward pointing caret */}
             <div
-              className={`absolute -bottom-1 left-4 w-2 h-2 rotate-45 border-r border-b ${
-                popup.type === 'like'
+              className={`absolute -bottom-1 left-4 w-2 h-2 rotate-45 border-r border-b ${popup.type === 'like'
                   ? 'bg-[#0a1628] border-blue-500/50'
                   : 'bg-[#240c11] border-red-500/50'
-              }`}
+                }`}
             />
           </div>
         )}
@@ -257,20 +254,18 @@ export function PartyChat({
         <button
           type="button"
           onClick={handleLike}
-          className={`px-3 py-1.5 rounded-lg border text-xs font-mono transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 group shadow-xs ${
-            hasLiked
+          className={`px-3 py-1.5 rounded-lg border text-xs font-mono transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 group shadow-xs ${hasLiked
               ? 'bg-blue-950/60 border-blue-500/60 text-blue-300 shadow-[0_0_12px_rgba(59,130,246,0.3)]'
               : 'bg-zinc-900/80 hover:bg-zinc-800 border-white/[0.08] hover:border-blue-500/30 text-zinc-300 hover:text-white'
-          }`}
+            }`}
           title={hasLiked ? 'You liked this stream' : 'Like'}
           aria-label="Like"
         >
           <ThumbsUp
-            className={`w-3.5 h-3.5 transition-transform duration-200 ${
-              hasLiked
+            className={`w-3.5 h-3.5 transition-transform duration-200 ${hasLiked
                 ? 'text-blue-400 fill-blue-500 scale-110'
                 : 'text-zinc-400 group-hover:text-blue-400 group-hover:scale-110'
-            }`}
+              }`}
           />
           <span className={`font-medium ${hasLiked ? 'text-blue-300 font-semibold' : ''}`}>Like</span>
         </button>
@@ -279,20 +274,18 @@ export function PartyChat({
         <button
           type="button"
           onClick={handleLove}
-          className={`px-3 py-1.5 rounded-lg border text-xs font-mono transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 group shadow-xs ${
-            hasLoved
+          className={`px-3 py-1.5 rounded-lg border text-xs font-mono transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 group shadow-xs ${hasLoved
               ? 'bg-red-950/60 border-red-500/60 text-red-300 shadow-[0_0_12px_rgba(239,68,68,0.3)]'
               : 'bg-zinc-900/80 hover:bg-zinc-800 border-white/[0.08] hover:border-red-500/30 text-zinc-300 hover:text-white'
-          }`}
+            }`}
           title={hasLoved ? 'You loved this stream' : 'Love'}
           aria-label="Love"
         >
           <Heart
-            className={`w-3.5 h-3.5 transition-transform duration-200 ${
-              hasLoved
+            className={`w-3.5 h-3.5 transition-transform duration-200 ${hasLoved
                 ? 'text-red-500 fill-red-500 scale-110'
                 : 'text-zinc-400 group-hover:text-red-400 group-hover:scale-110'
-            }`}
+              }`}
           />
           <span className={`font-medium ${hasLoved ? 'text-red-300 font-semibold' : ''}`}>Love</span>
         </button>
