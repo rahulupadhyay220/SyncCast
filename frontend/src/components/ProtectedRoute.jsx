@@ -21,7 +21,7 @@ export function ProtectedRoute({
 
   if (loading) {
     return (
-      <div className="min-h-[70vh] flex flex-col items-center justify-center gap-3 select-none">
+      <div className="min-h-[70vh] flex flex-col items-center justify-center gap-3">
         <div className="w-8 h-8 border-2 border-[#e50914] border-t-transparent rounded-full animate-spin" />
         <p className="text-xs text-zinc-400 font-mono">Verifying secure credentials...</p>
       </div>
@@ -50,7 +50,7 @@ export function ProtectedRoute({
 
     if (userRole !== requiredRole) {
       return (
-        <div className="min-h-[70vh] flex flex-col items-center justify-center px-4 py-16 text-center select-none">
+        <div className="min-h-[70vh] flex flex-col items-center justify-center px-4 py-16 text-center">
           <div className="p-4 rounded-2xl bg-red-950/30 border border-red-500/30 mb-4 text-red-500">
             <ShieldAlert className="w-10 h-10 mx-auto" />
           </div>

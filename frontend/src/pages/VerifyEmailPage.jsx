@@ -43,7 +43,7 @@ export function VerifyEmailPage() {
   };
 
   return (
-    <div className="min-h-[85vh] flex flex-col items-center justify-center px-4 py-12 relative select-none">
+    <div className="min-h-[85vh] flex flex-col items-center justify-center px-4 py-12 relative">
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-red-600/10 rounded-full blur-3xl pointer-events-none" />
 
       <div className="w-full max-w-md bg-[#090b10] border border-white/[0.08] rounded-2xl p-6 sm:p-8 shadow-2xl relative z-10 space-y-6 text-center animate-scaleIn">

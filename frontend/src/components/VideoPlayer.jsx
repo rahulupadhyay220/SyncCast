@@ -17,6 +17,7 @@ import {
   AlertTriangle,
   ChevronLeft,
   ChevronRight,
+  Film,
 } from 'lucide-react';
 import { extractYouTubeVideoId } from '../utils/youtube';
 
@@ -45,6 +46,8 @@ export function VideoPlayer({
   _simulatedRole,
   reactions,
   onTriggerReaction,
+  isTheater = false,
+  onToggleTheater,
 }) {
   const playerRef = useRef(null);
   const containerRef = useRef(null);
@@ -82,6 +85,42 @@ export function VideoPlayer({
     }
   }, [videoState.playing]);
 
+  // Robust multi-vendor toggle fullscreen (Maximize / Minimize)
+  const toggleFullscreen = useCallback(() => {
+    resetInactivityTimer();
+    const elem = containerRef.current;
+    if (!elem) return;
+
+    const isCurrentlyFullscreen = Boolean(
+      document.fullscreenElement ||
+      document.webkitFullscreenElement ||
+      document.mozFullScreenElement ||
+      document.msFullscreenElement
+    );
+
+    if (!isCurrentlyFullscreen) {
+      if (elem.requestFullscreen) {
+        elem.requestFullscreen().catch(() => {});
+      } else if (elem.webkitRequestFullscreen) {
+        elem.webkitRequestFullscreen();
+      } else if (elem.mozRequestFullScreen) {
+        elem.mozRequestFullScreen();
+      } else if (elem.msRequestFullscreen) {
+        elem.msRequestFullscreen();
+      }
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {});
+      } else if (document.webkitExitFullscreen) {
+        document.webkitExitFullscreen();
+      } else if (document.mozCancelFullScreen) {
+        document.mozCancelFullScreen();
+      } else if (document.msExitFullscreen) {
+        document.msExitFullscreen();
+      }
+    }
+  }, [resetInactivityTimer]);
+
   // Keep controls visible when paused; schedule 3-second auto-hide timer when streaming begins
   useEffect(() => {
     if (inactivityTimeoutRef.current) {
@@ -99,18 +138,55 @@ export function VideoPlayer({
     };
   }, [videoState.playing]);
 
-  // Keep fullscreen state accurate even if exited via Esc key
+  // Keep fullscreen state accurate even if exited via Esc key or system gesture
   useEffect(() => {
     const handleFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
+      const activeFs = Boolean(
+        document.fullscreenElement ||
+        document.webkitFullscreenElement ||
+        document.mozFullScreenElement ||
+        document.msFullscreenElement
+      );
+      setIsFullscreen(activeFs);
       setUserActive(true);
       if (videoState.playing) {
         resetInactivityTimer();
       }
     };
+
     document.addEventListener('fullscreenchange', handleFullscreenChange);
-    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
+    };
   }, [videoState.playing, resetInactivityTimer]);
+
+  // Keyboard shortcut listener ('f' / 'F' to maximize/minimize full screen, 'm' / 'M' to mute)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      const activeTag = document.activeElement?.tagName?.toLowerCase();
+      if (activeTag === 'input' || activeTag === 'textarea' || document.activeElement?.isContentEditable) {
+        return;
+      }
+
+      if (e.key === 'f' || e.key === 'F') {
+        e.preventDefault();
+        toggleFullscreen();
+      } else if (e.key === 'm' || e.key === 'M') {
+        e.preventDefault();
+        setIsMuted((prev) => !prev);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [toggleFullscreen, setIsMuted]);
 
   // Global mouse movement & interaction listener when in fullscreen
   useEffect(() => {
@@ -367,16 +443,6 @@ export function VideoPlayer({
     }
   };
 
-  const toggleFullscreen = () => {
-    resetInactivityTimer();
-    if (!containerRef.current) return;
-    if (!document.fullscreenElement) {
-      containerRef.current.requestFullscreen().catch(() => { });
-    } else {
-      document.exitFullscreen().catch(() => { });
-    }
-  };
-
   const progressValue = seeking ? localProgress : videoState.playedSeconds || 0;
   const durationValue = videoState.duration || 0;
 
@@ -418,11 +484,11 @@ export function VideoPlayer({
         className={`relative w-full ${isFullscreen
           ? 'h-full aspect-auto rounded-none border-0'
           : 'aspect-video rounded-xl border border-white/[0.08]'
-          } bg-black overflow-hidden shadow-2xl group transition-all select-none ${isFullscreen && !showControls ? 'cursor-none' : ''
+          } bg-black overflow-hidden shadow-2xl group transition-all ${isFullscreen && !showControls ? 'cursor-none' : ''
           }`}
       >
         {/* YouTube Embedded Player */}
-        <div className="absolute inset-0 w-full h-full select-none overflow-hidden">
+        <div className="absolute inset-0 w-full h-full overflow-hidden">
           <YouTube
             videoId={currentVideoId}
             opts={playerOptions}
@@ -440,24 +506,76 @@ export function VideoPlayer({
             <div
               key={r.id}
               style={{ left: `${r.xPos}%` }}
-              className="absolute bottom-16 px-2 py-0.5 rounded bg-black/85 border border-white/20 text-zinc-200 font-mono text-[11px] animate-bounce transition-all opacity-90 transform -translate-x-1/2 select-none"
+              className="absolute bottom-16 px-2 py-0.5 rounded bg-black/85 border border-white/20 text-zinc-200 font-mono text-[11px] animate-bounce transition-all opacity-90 transform -translate-x-1/2"
             >
               {r.emoji}
             </div>
           ))}
         </div>
 
-        {/* Read-Only Status Indicator for non-host peers */}
+        {/* Status Indicator for guest/non-host peers */}
         {!canControl && (
           <div
-            className={`absolute top-3 left-3 z-30 pointer-events-none flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-md bg-black/80 backdrop-blur-md border border-white/[0.1] font-mono text-[10px] text-zinc-300 transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'
-              }`}
+            className={`absolute top-3 left-3 z-30 pointer-events-none flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-black/85 backdrop-blur-md border border-white/[0.12] font-mono text-[10px] text-zinc-200 transition-opacity duration-300 shadow-md ${
+              showControls ? 'opacity-100' : 'opacity-0'
+            }`}
           >
-            <Lock className="w-3 h-3 text-[#e50914]" />
-            <span className="hidden xs:inline">Synced • Read-Only Mode</span>
-            <span className="xs:hidden">Synced</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="text-zinc-400 hidden xs:inline">Audience Guest:</span>
+            <span className="text-white font-medium">Synced</span>
+            <span className="hidden md:inline text-zinc-500">• Full Screen Permitted</span>
           </div>
         )}
+
+        {/* Top-Right Quick Screen Controls: Theater & Fullscreen (Available to all users including Guests) */}
+        <div
+          className={`absolute top-3 right-3 z-30 flex items-center gap-1.5 transition-opacity duration-300 ${
+            showControls ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+          }`}
+        >
+          {onToggleTheater && !isFullscreen && (
+            <button
+              type="button"
+              onClick={onToggleTheater}
+              id="theater-mode-toggle"
+              className={`px-2.5 py-1 rounded-md backdrop-blur-md border transition-all cursor-pointer flex items-center gap-1.5 font-mono text-[10px] shadow-lg ${
+                isTheater
+                  ? 'bg-[#e50914] border-[#e50914] text-white'
+                  : 'bg-black/80 hover:bg-zinc-800 border-white/10 text-zinc-300 hover:text-white'
+              }`}
+              title={isTheater ? 'Minimize Theater (Standard Layout)' : 'Maximize Theater (Full Width Stage)'}
+              aria-label={isTheater ? 'Minimize Theater Mode' : 'Maximize Theater Mode'}
+            >
+              <Film className="w-3 h-3 text-red-400" />
+              <span className="hidden xs:inline">{isTheater ? 'Minimize Stage' : 'Theater Stage'}</span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={toggleFullscreen}
+            id="quick-fullscreen-toggle"
+            className={`px-2.5 py-1 rounded-md backdrop-blur-md border transition-all cursor-pointer flex items-center gap-1.5 font-mono text-[10px] shadow-lg group ${
+              isFullscreen
+                ? 'bg-amber-500/20 hover:bg-amber-500/30 border-amber-500/40 text-amber-200'
+                : 'bg-black/85 hover:bg-[#e50914] border-white/15 hover:border-[#e50914] text-zinc-200 hover:text-white'
+            }`}
+            title={isFullscreen ? 'Minimize Screen (Exit Full Screen)' : 'Maximize Screen (Make Full Screen)'}
+            aria-label={isFullscreen ? 'Minimize Screen' : 'Maximize Screen'}
+          >
+            {isFullscreen ? (
+              <>
+                <Minimize className="w-3.5 h-3.5 text-amber-400 group-hover:scale-110 transition-transform" />
+                <span className="font-semibold">Minimize Screen</span>
+              </>
+            ) : (
+              <>
+                <Maximize className="w-3.5 h-3.5 text-emerald-400 group-hover:scale-110 transition-transform" />
+                <span className="font-semibold">Maximize Screen</span>
+              </>
+            )}
+          </button>
+        </div>
 
         {/* Buffering Indicator */}
         {videoState.buffering && !playerError && (
@@ -482,30 +600,78 @@ export function VideoPlayer({
           </div>
         )}
 
-        {/* Center Minimal Play/Pause Click Overlay */}
-        {canControl && !playerError && (
+        {/* Interactive Video Overlay (Double-click to Maximize/Minimize Full Screen for both Host and Guests) */}
+        {!playerError && (
           <div
             onClick={() => {
-              onTogglePlay();
               resetInactivityTimer();
+              if (canControl) {
+                onTogglePlay();
+              }
             }}
             onDoubleClick={(e) => {
               e.stopPropagation();
               toggleFullscreen();
             }}
-            className={`absolute inset-0 flex items-center justify-center transition-all z-10 ${showControls ? 'cursor-pointer' : isFullscreen ? 'cursor-none' : 'cursor-default'
-              }`}
+            className={`absolute inset-0 flex items-center justify-center transition-all z-10 ${
+              showControls
+                ? 'cursor-pointer'
+                : isFullscreen
+                ? 'cursor-none'
+                : 'cursor-default'
+            }`}
+            title={
+              canControl
+                ? videoState.playing
+                  ? 'Click to Pause • Double-click to Maximize/Minimize'
+                  : 'Click to Play • Double-click to Maximize/Minimize'
+                : isFullscreen
+                ? 'Double-click to Minimize Screen (Exit Full Screen)'
+                : 'Double-click to Maximize Screen (Full Screen)'
+            }
           >
-            <div
-              className={`w-14 h-14 rounded-xl bg-[#e50914] hover:bg-[#c90812] text-white flex items-center justify-center transition-all duration-300 hover:scale-105 active:scale-95 shadow-xl ${showControls ? 'opacity-100 scale-100 pointer-events-auto' : 'opacity-0 scale-90 pointer-events-none'
+            {/* Center Play/Pause Indicator for Host */}
+            {canControl ? (
+              <div
+                className={`w-14 h-14 rounded-xl bg-[#e50914] hover:bg-[#c90812] text-white flex items-center justify-center transition-all duration-300 hover:scale-105 active:scale-95 shadow-xl ${
+                  showControls
+                    ? 'opacity-100 scale-100 pointer-events-auto'
+                    : 'opacity-0 scale-90 pointer-events-none'
                 }`}
-            >
-              {videoState.playing ? (
-                <Pause className="w-6 h-6 fill-white" />
-              ) : (
-                <Play className="w-6 h-6 fill-white ml-0.5" />
-              )}
-            </div>
+              >
+                {videoState.playing ? (
+                  <Pause className="w-6 h-6 fill-white" />
+                ) : (
+                  <Play className="w-6 h-6 fill-white ml-0.5" />
+                )}
+              </div>
+            ) : (
+              /* Center Quick Maximize / Minimize button for Guest (appears on hover) */
+              <div
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleFullscreen();
+                }}
+                className={`px-4 py-2 rounded-xl bg-black/80 hover:bg-[#e50914] backdrop-blur-md border border-white/20 text-white flex items-center gap-2 transition-all duration-300 hover:scale-105 active:scale-95 shadow-2xl cursor-pointer ${
+                  showControls && isHovered
+                    ? 'opacity-85 hover:opacity-100 pointer-events-auto'
+                    : 'opacity-0 pointer-events-none'
+                }`}
+                title={isFullscreen ? 'Minimize Screen (Exit Full Screen)' : 'Maximize Screen (Make Full Screen)'}
+              >
+                {isFullscreen ? (
+                  <>
+                    <Minimize className="w-4 h-4 text-amber-400" />
+                    <span className="text-xs font-mono font-medium">Minimize Screen</span>
+                  </>
+                ) : (
+                  <>
+                    <Maximize className="w-4 h-4 text-emerald-400" />
+                    <span className="text-xs font-mono font-medium">Maximize Full Screen</span>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -687,13 +853,25 @@ export function VideoPlayer({
                 <button
                   type="button"
                   onClick={toggleFullscreen}
-                  className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
-                  title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+                  id="bottom-fullscreen-toggle"
+                  className={`p-1.5 sm:px-2.5 sm:py-1 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 font-mono text-xs ${
+                    isFullscreen
+                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                      : 'text-zinc-300 hover:text-white hover:bg-white/[0.08] border border-white/[0.06]'
+                  }`}
+                  title={isFullscreen ? 'Minimize Screen (Exit Full Screen)' : 'Maximize Screen (Make Full Screen)'}
+                  aria-label={isFullscreen ? 'Minimize Screen' : 'Maximize Screen'}
                 >
                   {isFullscreen ? (
-                    <Minimize className="w-3.5 h-3.5" />
+                    <>
+                      <Minimize className="w-3.5 h-3.5 text-amber-400" />
+                      <span className="text-[10px] font-semibold hidden md:inline">Minimize</span>
+                    </>
                   ) : (
-                    <Maximize className="w-3.5 h-3.5" />
+                    <>
+                      <Maximize className="w-3.5 h-3.5 text-emerald-400" />
+                      <span className="text-[10px] font-semibold hidden md:inline">Maximize</span>
+                    </>
                   )}
                 </button>
               </div>

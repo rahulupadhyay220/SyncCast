@@ -67,7 +67,7 @@ export function FaqPage() {
   });
 
   return (
-    <div className="min-h-screen bg-[#050608] text-zinc-100 py-8 sm:py-12 px-3 sm:px-6 lg:px-8 space-y-6 sm:space-y-10 animate-fadeIn select-none">
+    <div className="min-h-screen bg-[#050608] text-zinc-100 py-8 sm:py-12 px-3 sm:px-6 lg:px-8 space-y-6 sm:space-y-10 animate-fadeIn">
       {/* Page Header */}
       <div className="max-w-3xl mx-auto space-y-3 text-center">
         <span className="text-[11px] font-mono uppercase tracking-widest text-zinc-500 font-semibold">

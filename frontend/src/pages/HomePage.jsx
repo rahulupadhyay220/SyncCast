@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { HeroSection } from '../components/landing/HeroSection';
 import { FeaturesSection } from '../components/landing/FeaturesSection';
-import { Link, useNavigate } from 'react-router-dom';
+import { PlatformModulesSlider } from '../components/landing/PlatformModulesSlider';
+import { useNavigate } from 'react-router-dom';
 import {
   Film,
   Tv,
@@ -9,7 +10,6 @@ import {
   BookOpen,
   LayoutDashboard,
   Radio,
-  ArrowRight,
   AlertTriangle,
   X,
 } from 'lucide-react';
@@ -113,7 +113,7 @@ export function HomePage({ onSelectPreset }) {
   ];
 
   return (
-    <div className="space-y-16 pb-20 select-none">
+    <div className="space-y-16 pb-20">
       {/* Eviction / Removal / Block Alert Notice */}
       {evictionNotice && (
         <div className="max-w-5xl mx-auto px-4 pt-6 animate-fadeIn">
@@ -145,94 +145,12 @@ export function HomePage({ onSelectPreset }) {
         onSelectMovie={handleSelectHeroMovie}
       />
 
-      {/* 2. Directory Hub */}
-      <section className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-white/[0.07] pb-4">
-          <div className="space-y-1">
-            <span className="text-[11px] font-mono uppercase tracking-widest text-zinc-500 font-semibold">
-              Directory
-            </span>
-            <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-              Platform Modules
-            </h2>
-            <p className="text-xs sm:text-sm text-zinc-400 font-normal">
-              Direct access to dedicated catalog routes, technical architecture, and room management.
-            </p>
-          </div>
+      {/* 2. Platform Modules Slider */}
+      <PlatformModulesSlider
+        sections={sectionsPortal}
+        onCardClick={handleCardClick}
+      />
 
-          <div className="flex items-center gap-2">
-            <Link
-              to="/join"
-              className="px-4 py-2 rounded-lg bg-zinc-900 border border-white/10 hover:border-white/20 text-zinc-300 hover:text-white font-medium text-xs transition-colors"
-            >
-              Enter Code
-            </Link>
-            <Link
-              to="/host"
-              className="px-4 py-2 rounded-lg bg-[#e50914] hover:bg-[#c90812] text-white font-semibold text-xs transition-colors"
-            >
-              Host Room
-            </Link>
-          </div>
-        </div>
-
-        {/* Section Cards Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-          {sectionsPortal.map((sec, idx) => {
-            const Icon = sec.icon;
-            return (
-              <Link
-                key={idx}
-                to={sec.route}
-                onClick={(e) => handleCardClick(e, sec.route)}
-                className="group rounded-xl bg-[#090b10] border border-white/[0.08] hover:border-white/20 transition-all duration-200 overflow-hidden flex flex-col justify-between"
-              >
-                <div>
-                  {/* Contextual Unsplash Image with Dark Vignette */}
-                  <div className="relative aspect-[16/10] w-full overflow-hidden bg-[#07080c] border-b border-white/[0.06]">
-                    <img
-                      src={sec.image}
-                      alt={sec.title}
-                      className="w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-105"
-                      loading="lazy"
-                    />
-                    {/* Dark Vignette Overlay for Text Legibility and Minimalism */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#090b10] via-black/40 to-transparent pointer-events-none" />
-
-                    {/* Floating Header Badges */}
-                    <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between pointer-events-none">
-                      <div className="w-7 h-7 rounded-md bg-black/80 backdrop-blur-md border border-white/10 flex items-center justify-center text-zinc-200">
-                        <Icon className="w-3.5 h-3.5 text-[#e50914]" />
-                      </div>
-                      <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-300 px-2 py-0.5 rounded-md bg-black/80 backdrop-blur-md border border-white/10">
-                        {sec.badge}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Content */}
-                  <div className="p-4 space-y-1">
-                    <h3 className="text-sm font-bold text-white group-hover:text-[#e50914] transition-colors tracking-tight">
-                      {sec.title}
-                    </h3>
-                    <p className="text-xs text-zinc-400 font-normal leading-relaxed line-clamp-2">
-                      {sec.desc}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Minimalist Footer */}
-                <div className="px-4 py-2.5 border-t border-white/[0.05] bg-[#07080c]/60 flex items-center justify-between text-xs text-zinc-400 group-hover:text-zinc-200 transition-colors">
-                  <span className="font-mono text-[10px] uppercase tracking-wider text-zinc-500 group-hover:text-zinc-300">
-                    Open Module
-                  </span>
-                  <ArrowRight className="w-3.5 h-3.5 text-[#e50914] group-hover:translate-x-1 transition-transform" />
-                </div>
-              </Link>
-            );
-          })}
-        </div>
-      </section>
 
       {/* 3. Engineered for Flawless Shared Viewing Section */}
       <FeaturesSection />

@@ -29,6 +29,8 @@ export const ACTIONS = Object.freeze({
   ASSIGN_ROLE: 'assign_role',
   TRANSFER_HOST: 'transfer_host',
   TERMINATE_SESSION: 'terminate_session',
+  TOGGLE_FULLSCREEN: 'toggle_fullscreen',
+  MINIMIZE_MAXIMIZE_SCREEN: 'minimize_maximize_screen',
 });
 
 /**
@@ -53,11 +55,25 @@ export const permissions = {
     ACTIONS.ASSIGN_ROLE,
     ACTIONS.TRANSFER_HOST,
     ACTIONS.TERMINATE_SESSION,
+    ACTIONS.TOGGLE_FULLSCREEN,
+    ACTIONS.MINIMIZE_MAXIMIZE_SCREEN,
   ],
-  guest: [],
-  participant: [],
-  moderator: [],
-  viewer: [],
+  guest: [
+    ACTIONS.TOGGLE_FULLSCREEN,
+    ACTIONS.MINIMIZE_MAXIMIZE_SCREEN,
+  ],
+  participant: [
+    ACTIONS.TOGGLE_FULLSCREEN,
+    ACTIONS.MINIMIZE_MAXIMIZE_SCREEN,
+  ],
+  moderator: [
+    ACTIONS.TOGGLE_FULLSCREEN,
+    ACTIONS.MINIMIZE_MAXIMIZE_SCREEN,
+  ],
+  viewer: [
+    ACTIONS.TOGGLE_FULLSCREEN,
+    ACTIONS.MINIMIZE_MAXIMIZE_SCREEN,
+  ],
 };
 
 export default {

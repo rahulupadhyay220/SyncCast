@@ -50,7 +50,7 @@ export function ReauthModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn select-none">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
       <div className="max-w-md w-full bg-[#090b10] border border-white/15 rounded-2xl p-6 sm:p-7 shadow-2xl relative space-y-5 animate-scaleIn">
         {/* Close Button */}
         <button

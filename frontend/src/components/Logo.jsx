@@ -1,14 +1,6 @@
 import React from 'react';
 
-/**
- * Official SyncCast Logo Component
- * - Exact typography and dimensions from official brand assets
- * - Signature broadcast waves over 's' and 'C' matched to website cinema red (#e50914)
- * - Transparent background cropped to exact bounding box (aspect ratio ~3.43:1)
- * - Calibrated height and dimensions according to navbar default size (h-14 / 56px)
- * - Supports dark theme (crisp white text for dark navbar) and light theme
- * - Supports 'accent' variant (white 'sync' + radiant red 'Cast')
- */
+//Official SyncCast Logo Component
 export function Logo({
   theme = 'dark',     // 'dark' (white text) | 'light' (original dark text)
   size = 'md',        // 'sm' (28px) | 'md' (34px - default navbar size) | 'lg' (42px)
@@ -30,7 +22,7 @@ export function Logo({
   }
 
   return (
-    <div className={`inline-flex items-center select-none ${className}`}>
+    <div className={`inline-flex items-center ${className}`}>
       <img
         src={imageSrc}
         alt="SyncCast"

@@ -22,7 +22,7 @@ export function AuthPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  const { signIn, signUp, resendVerificationEmail, isSignedIn, loading, isConfigured } = useAuth();
+  const { signIn, signUp, resendVerificationEmail, isSignedIn, loading } = useAuth();
 
   // Derive mode directly from URL path or search query (?mode=signup or /sign-up)
   const mode =
@@ -31,7 +31,7 @@ export function AuthPage() {
     searchParams.get('mode') === 'signup'
       ? 'signup'
       : 'login';
-  const redirectUrl = searchParams.get('redirect_url') || '/dashboard';
+  const redirectUrl = searchParams.get('redirect_url') || '/';
   const justRegistered = searchParams.get('registered') === 'true';
   const justVerified = searchParams.get('verified') === 'true';
   const justReset = searchParams.get('reset') === 'true';
@@ -309,17 +309,6 @@ export function AuthPage() {
             </p>
           </div>
 
-          {!isConfigured && (
-            <div className="mb-5 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs flex items-start gap-2.5">
-              <AlertCircle className="w-4 h-4 shrink-0 text-amber-400 mt-0.5" />
-              <div>
-                <p className="font-semibold text-amber-200">Local Development Mode Active</p>
-                <p className="text-[11px] text-amber-300/80 mt-0.5 leading-relaxed">
-                  Supabase credentials are set to placeholder in <code className="text-white bg-black/40 px-1 py-0.5 rounded font-mono text-[10px]">.env.local</code>. Account registration and login now work instantly in Local Mode! To enable cloud sync with Supabase, add your real Project URL and Anon Key.
-                </p>
-              </div>
-            </div>
-          )}
 
           {/* Segmented Switcher: Sign In vs Create Account */}
           <div className="bg-zinc-900/90 p-1 rounded-xl border border-white/10 grid grid-cols-2 gap-1 mb-6">
@@ -481,7 +470,7 @@ export function AuthPage() {
 
               {/* Remember Me */}
               <div className="flex items-center justify-between pt-1">
-                <label className="flex items-center gap-2 cursor-pointer select-none">
+                <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={rememberMe}

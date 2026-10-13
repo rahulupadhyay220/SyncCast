@@ -70,6 +70,7 @@ export function WatchPartyRoom({
   const location = useLocation();
   const [copied, setCopied] = useState(false);
   const [activeTab, setActiveTab] = useState('chat');
+  const [isTheaterMode, setIsTheaterMode] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(
     Boolean(location.state?.openShareModal)
   );
@@ -84,7 +85,7 @@ export function WatchPartyRoom({
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-4 sm:space-y-6 animate-fadeIn select-none">
+    <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-4 sm:space-y-6 animate-fadeIn">
       {/* Top Session Status Bar */}
       <div className="p-3 sm:p-3.5 rounded-xl bg-[#090b10] border border-white/[0.08] flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-3 text-white">
         {/* Room & Connectivity */}
@@ -179,10 +180,10 @@ export function WatchPartyRoom({
         </div>
       </div>
 
-      {/* Main Content Grid: Video + Controls (Left 8 cols), Sidebar (Right 4 cols) */}
+      {/* Main Content Grid: Video + Controls (Left 8 or 12 cols in theater), Sidebar (Right 4 or 12 cols) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 items-start">
         {/* Left: Host Room Link Bar + Player + Metadata Card */}
-        <div className="lg:col-span-8 space-y-4">
+        <div className={`${isTheaterMode ? 'lg:col-span-12' : 'lg:col-span-8'} space-y-4`}>
           {/* Host Room Link Bar */}
           <HostRoomLinkBar
             currentVideoId={videoState.videoId}
@@ -209,11 +210,13 @@ export function WatchPartyRoom({
             reactions={reactions}
             reactionCounts={reactionCounts}
             onTriggerReaction={triggerReaction}
+            isTheater={isTheaterMode}
+            onToggleTheater={() => setIsTheaterMode((prev) => !prev)}
           />
 
           {/* Video Metadata Card */}
           <div className="p-3.5 sm:p-4 rounded-xl bg-[#090b10] border border-white/[0.07] space-y-3 text-white">
-            <div className="flex items-start justify-between gap-3 sm:gap-4">
+            <div className="flex items-start justify-between gap-3 sm:gap-4 flex-wrap">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5 mb-1 text-[11px] font-mono uppercase text-[#e50914] font-semibold">
                   <Film className="w-3 h-3" />
@@ -227,19 +230,23 @@ export function WatchPartyRoom({
                 </p>
               </div>
 
-              <div className="shrink-0 text-right">
+              <div className="shrink-0 flex items-center gap-2 flex-wrap">
                 <span className="inline-flex items-center gap-1.5 text-[11px] sm:text-xs font-mono px-2 sm:px-2.5 py-1 rounded-md border border-white/10 bg-zinc-900 text-zinc-300">
                   {canControlPlayback ? (
                     <>
                       <Unlock className="w-3 h-3 text-emerald-400" />
-                      <span>Unlocked</span>
+                      <span>Host Controls</span>
                     </>
                   ) : (
                     <>
                       <Lock className="w-3 h-3 text-amber-400" />
-                      <span>Locked</span>
+                      <span>Host Controlled</span>
                     </>
                   )}
+                </span>
+                <span className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-mono px-2 sm:px-2.5 py-1 rounded-md border border-emerald-500/20 bg-emerald-500/10 text-emerald-400">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                  <span className="hidden xs:inline">Screen:</span> Maximize Allowed
                 </span>
               </div>
             </div>
@@ -247,7 +254,7 @@ export function WatchPartyRoom({
         </div>
 
         {/* Right: Sidebar Tabs */}
-        <div className="lg:col-span-4 space-y-4">
+        <div className={`${isTheaterMode ? 'lg:col-span-12' : 'lg:col-span-4'} space-y-4`}>
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="w-full grid grid-cols-3 bg-zinc-900/80 p-0.5 rounded-lg border border-white/10">
               <TabsTrigger value="chat" className="justify-center text-xs">

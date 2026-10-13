@@ -50,7 +50,7 @@ export function AdminDashboardPage() {
   }, [loadTelemetry]);
 
   return (
-    <div className="min-h-screen bg-[#050608] text-zinc-100 py-10 px-4 sm:px-6 lg:px-8 space-y-8 select-none">
+    <div className="min-h-screen bg-[#050608] text-zinc-100 py-10 px-4 sm:px-6 lg:px-8 space-y-8">
       {/* Header Banner */}
       <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-6 border-b border-white/[0.08]">
         <div>

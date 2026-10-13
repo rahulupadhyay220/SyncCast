@@ -39,7 +39,7 @@ export function FeaturesSection() {
   ];
 
   return (
-    <section id="features" className="py-16 sm:py-24 bg-[#050608] border-t border-white/[0.07] select-none">
+    <section id="features" className="py-16 sm:py-24 bg-[#050608] border-t border-white/[0.07]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
         <div className="max-w-2xl space-y-2">
           <span className="text-[11px] font-mono uppercase tracking-widest text-zinc-500 font-semibold">

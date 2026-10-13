@@ -6,7 +6,7 @@ const CURRENT_YEAR = new Date().getFullYear();
 
 export function Footer() {
   return (
-    <footer className="w-full border-t border-white/[0.07] bg-[#050608] text-zinc-400 pt-10 sm:pt-12 pb-8 px-3 sm:px-6 lg:px-8 mt-auto select-none">
+    <footer className="w-full border-t border-white/[0.07] bg-[#050608] text-zinc-400 pt-10 sm:pt-12 pb-8 px-3 sm:px-6 lg:px-8 mt-auto">
       <div className="max-w-7xl mx-auto space-y-8">
         {/* Navigation Columns */}
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6 sm:gap-8 items-start">
@@ -80,12 +80,6 @@ export function Footer() {
             <Link to="/privacy" className="hover:text-zinc-300 transition-colors">Privacy</Link>
             <span className="text-zinc-700">•</span>
             <Link to="/terms" className="hover:text-zinc-300 transition-colors">Terms</Link>
-          </div>
-
-          <div className="flex items-center gap-2 text-xs font-mono text-zinc-500">
-            <span>WebSocket Relay</span>
-            <span className="text-zinc-700">•</span>
-            <span>Zero Third-Party Tracking</span>
           </div>
         </div>
       </div>

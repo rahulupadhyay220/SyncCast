@@ -169,7 +169,7 @@ export function DashboardPage({
   ];
 
   return (
-    <div className="min-h-screen bg-[#050608] text-zinc-100 py-6 sm:py-8 px-3 sm:px-6 lg:px-8 space-y-6 sm:space-y-8 animate-fadeIn select-none">
+    <div className="min-h-screen bg-[#050608] text-zinc-100 py-6 sm:py-8 px-3 sm:px-6 lg:px-8 space-y-6 sm:space-y-8 animate-fadeIn">
       {/* 1. Header Strip */}
       <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-white/[0.07]">
         <div className="space-y-1">

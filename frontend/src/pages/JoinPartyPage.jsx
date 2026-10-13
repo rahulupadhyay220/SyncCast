@@ -202,7 +202,7 @@ export function JoinPartyPage({
   };
 
   return (
-    <div className="min-h-screen bg-[#050608] text-zinc-100 py-12 px-4 sm:px-6 lg:px-8 space-y-10 animate-fadeIn select-none">
+    <div className="min-h-screen bg-[#050608] text-zinc-100 py-12 px-4 sm:px-6 lg:px-8 space-y-10 animate-fadeIn">
       {/* Page Header */}
       <div className="max-w-4xl mx-auto space-y-2 text-center">
         <span className="text-[11px] font-mono uppercase tracking-widest text-zinc-500 font-semibold">
@@ -271,13 +271,12 @@ export function JoinPartyPage({
                   <User className="w-3.5 h-3.5 text-zinc-400" />
                   <span>Joining Role: Guest</span>
                 </div>
-                <span className="text-[11px] text-amber-400/90 font-mono flex items-center gap-1">
-                  <Lock className="w-3 h-3 text-amber-400" />
-                  <span>Host is creator only</span>
+                <span className="text-[11px] text-emerald-400 font-mono flex items-center gap-1">
+                  <span>Full Screen Permitted</span>
                 </span>
               </div>
               <p className="text-[11px] text-zinc-400 leading-relaxed">
-                You will enter as an Audience Guest with watch, listen, and live chat access. Stream playback controls and room settings are strictly reserved for the Room Host.
+                You will enter as an Audience Guest with full permission to minimize and maximize (make the streaming video full screen) your screen, watch, listen, and chat. Playback timeline is synchronized by the Host.
               </p>
             </div>
 

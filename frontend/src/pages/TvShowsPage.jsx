@@ -12,7 +12,7 @@ export function TvShowsPage({ onSelectPreset }) {
   ];
 
   return (
-    <div className="min-h-screen bg-[#050608] text-zinc-100 py-8 sm:py-10 px-3 sm:px-6 lg:px-8 space-y-6 sm:space-y-8 animate-fadeIn select-none">
+    <div className="min-h-screen bg-[#050608] text-zinc-100 py-8 sm:py-10 px-3 sm:px-6 lg:px-8 space-y-6 sm:space-y-8 animate-fadeIn">
       {/* Header Banner */}
       <div className="max-w-7xl mx-auto space-y-2 pb-4 border-b border-white/[0.07]">
         <span className="text-[11px] font-mono uppercase tracking-widest text-zinc-500 font-semibold">

@@ -57,7 +57,7 @@ export function UserMenu() {
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 p-1 pl-1.5 pr-2.5 rounded-full bg-zinc-900/80 hover:bg-zinc-850 border border-white/10 hover:border-white/20 transition-all cursor-pointer group select-none"
+        className="flex items-center gap-2 p-1 pl-1.5 pr-2.5 rounded-full bg-zinc-900/80 hover:bg-zinc-850 border border-white/10 hover:border-white/20 transition-all cursor-pointer group"
         aria-label="User Account Menu"
         aria-expanded={isOpen}
       >

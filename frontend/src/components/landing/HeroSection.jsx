@@ -49,7 +49,7 @@ export function HeroSection({ onStartParty, onJoinParty, onSelectMovie }) {
   };
 
   return (
-    <section className="relative min-h-[620px] sm:min-h-[720px] lg:min-h-[780px] w-full flex flex-col justify-end overflow-hidden pb-10 sm:pb-14 select-none">
+    <section className="relative min-h-[620px] sm:min-h-[720px] lg:min-h-[780px] w-full flex flex-col justify-end overflow-hidden pb-10 sm:pb-14">
       {/* Background Hero Backdrop Image */}
       <div className="absolute inset-0 z-0">
         <img
@@ -176,7 +176,7 @@ export function HeroSection({ onStartParty, onJoinParty, onSelectMovie }) {
                 <div
                   key={movie.id}
                   onClick={() => handleCardClick(idx)}
-                  className={`relative flex-shrink-0 w-28 sm:w-36 md:w-40 aspect-[2/3] rounded-xl overflow-hidden cursor-pointer transition-all duration-200 select-none border ${
+                  className={`relative flex-shrink-0 w-28 sm:w-36 md:w-40 aspect-[2/3] rounded-xl overflow-hidden cursor-pointer transition-all duration-200 border ${
                     isSelected
                       ? 'border-[#e50914] shadow-md z-20'
                       : 'border-white/10 opacity-75 hover:opacity-100 hover:border-white/25 z-10'

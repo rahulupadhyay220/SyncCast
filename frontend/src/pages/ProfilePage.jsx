@@ -166,7 +166,7 @@ export function ProfilePage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#050608] text-zinc-100 py-10 px-4 sm:px-6 lg:px-8 select-none">
+    <div className="min-h-screen bg-[#050608] text-zinc-100 py-10 px-4 sm:px-6 lg:px-8">
       <div className="max-w-4xl mx-auto space-y-8">
         {/* Page Header */}
         <div className="space-y-1">

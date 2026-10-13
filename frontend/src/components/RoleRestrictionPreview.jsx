@@ -16,6 +16,7 @@ export function RoleRestrictionPreview({
     { name: 'Mute Participants', host: true, guest: false },
     { name: 'Transfer Host Role / Ownership', host: true, guest: false },
     { name: 'Watch Stream & Listen to Audio', host: true, guest: true },
+    { name: 'Maximize & Minimize Screen (Full Screen)', host: true, guest: true },
     { name: 'Send Messages in Live Chat', host: true, guest: true },
     { name: 'Send Signal Reactions', host: true, guest: true },
     { name: 'Leave Room Voluntarily', host: true, guest: true },
@@ -108,7 +109,7 @@ export function RoleRestrictionPreview({
           <span>
             {isHost
               ? 'You have full host ownership of this room'
-              : 'Guests cannot control playback or transfer roles'}
+              : 'Guests cannot alter shared playback, but can freely maximize/minimize their screen'}
           </span>
         </div>
         <span className="text-zinc-500">ENFORCED_SERVER_SIDE</span>

@@ -51,6 +51,12 @@ assert.strictEqual(hasPermission(ROLES.VIEWER, ACTIONS.PLAY_VIDEO), false, 'View
 assert.strictEqual(hasPermission(ROLES.VIEWER, ACTIONS.PAUSE_VIDEO), false, 'Viewer cannot pause');
 assert.strictEqual(hasPermission(ROLES.VIEWER, ACTIONS.SEEK_VIDEO), false, 'Viewer cannot seek');
 assert.strictEqual(hasPermission(ROLES.VIEWER, ACTIONS.CHANGE_VIDEO), false, 'Viewer cannot change video');
+
+// Guest & Participant screen permissions: guests have permission to minimize and maximize screen (full screen)
+assert.strictEqual(hasPermission(ROLES.GUEST, ACTIONS.TOGGLE_FULLSCREEN), true, 'Guest must have permission to toggle fullscreen');
+assert.strictEqual(hasPermission(ROLES.GUEST, ACTIONS.MINIMIZE_MAXIMIZE_SCREEN), true, 'Guest must have permission to minimize and maximize screen');
+assert.strictEqual(hasPermission(ROLES.PARTICIPANT, ACTIONS.TOGGLE_FULLSCREEN), true, 'Participant must have permission to toggle fullscreen');
+assert.strictEqual(hasPermission(ROLES.PARTICIPANT, ACTIONS.MINIMIZE_MAXIMIZE_SCREEN), true, 'Participant must have permission to minimize and maximize screen');
 console.log('✓ Permission Matrix & RBAC tests passed.');
 
 // TEST 2: Role normalization and validation
