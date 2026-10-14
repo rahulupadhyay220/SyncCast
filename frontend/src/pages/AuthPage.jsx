@@ -407,9 +407,7 @@ export function AuthPage() {
             </div>
           )}
 
-          {/* ============================================================== */}
-          {/* TAB 1: LOGIN (SIGN IN) FORM                                     */}
-          {/* ============================================================== */}
+          {/* Sign In Form */}
           {mode === 'login' ? (
             <form onSubmit={handleLoginSubmit} className="space-y-4" id="login-form">
               {/* Email Address */}
@@ -517,9 +515,7 @@ export function AuthPage() {
               </div>
             </form>
           ) : (
-            /* ============================================================== */
-            /* TAB 2: SIGN UP (CREATE ACCOUNT) FORM                           */
-            /* ============================================================== */
+            /* Sign Up Form */
             <form onSubmit={handleSignupSubmit} className="space-y-4" id="signup-form">
               {/* Full Name */}
               <div>

@@ -9,33 +9,23 @@ import { initializeSockets } from "./sockets/socketHandler.js";
 
 dotenv.config();
 
-/**
- * Bootstrap and launch server
- */
+// Boot up the database, attach Socket.io to the HTTP instance, and start listening.
 const startServer = async () => {
   try {
-    // Connect MongoDB
     await connectDatabase();
 
-    // Create HTTP server
     const httpServer = http.createServer(app);
-
-    // Initialize Socket.io
     const io = initializeSockets(httpServer);
 
-    // Start server
-    const server = httpServer.listen(config.port || 5000, () => {
-      logger.info(`Server running on port ${config.port || 5000}`);
-      logger.info(
-        `Health Check: http://localhost:${config.port || 5000}/api/health`
-      );
+    const port = config.port || 5000;
+    const server = httpServer.listen(port, () => {
+      logger.info(`Server running on port ${port}`);
+      logger.info(`Health check available at http://localhost:${port}/api/health`);
     });
 
-    /**
-     * Graceful Shutdown
-     */
+    // Clean teardown on SIGINT/SIGTERM: finish in-flight requests, drain sockets, and drop DB connection
     const gracefulShutdown = async (signal) => {
-      logger.info(`${signal} received. Shutting down server...`);
+      logger.info(`${signal} received - starting graceful shutdown`);
 
       io.close(() => {
         logger.info("Socket.io connections closed.");
@@ -43,15 +33,14 @@ const startServer = async () => {
 
       server.close(async () => {
         logger.info("HTTP server closed.");
-
         await disconnectDatabase();
-
         logger.info("MongoDB disconnected.");
         process.exit(0);
       });
 
+      // Force kill if graceful cleanup hangs for more than 10 seconds
       setTimeout(() => {
-        logger.error("Forced shutdown.");
+        logger.error("Forced shutdown - teardown timed out.");
         process.exit(1);
       }, 10000);
     };

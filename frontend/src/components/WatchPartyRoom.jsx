@@ -29,8 +29,6 @@ export function WatchPartyRoom({
   roomCode,
   userName,
   simulatedRole,
-  _isRoomCreator = false,
-  _switchSimulatedRole,
   canControlPlayback,
   canManageUsers,
   videoState,
