@@ -6,6 +6,8 @@ import {
   socketPauseVideoSchema,
   socketSeekVideoSchema,
   socketChangeVideoSchema,
+  socketSyncPlaybackSchema,
+  socketRequestSyncSchema,
 } from '../validators/socketValidator.js';
 import { normalizeRoomId } from '../utils/roomCodeGenerator.js';
 import logger from '../utils/logger.js';
@@ -295,6 +297,86 @@ export const registerPlaybackHandlers = (io, socket, sessions) => {
 
   socket.on('end_stream', handleEndStream);
   socket.on('terminate_session', handleEndStream);
+
+  /**
+   * Event: sync_playback
+   * Authoritative host playback synchronization heartbeat.
+   * Updates backend room time anchor and broadcasts lightweight sync to peers.
+   */
+  socket.on('sync_playback', async (payload, callback) => {
+    try {
+      const session = guard(ACTIONS.PLAY_VIDEO, callback);
+      if (!session) return;
+
+      const parsed = socketSyncPlaybackSchema.safeParse(payload || {});
+      if (!parsed.success) {
+        if (typeof callback === 'function') callback({ success: false, error: 'Invalid payload format' });
+        return;
+      }
+
+      const roomId = normalizeRoomId(parsed.data.roomId || session.roomId);
+      const { currentTime, playbackState } = parsed.data;
+
+      const room = await RoomService.syncPlayback({
+        roomId,
+        currentTime,
+        playbackState,
+        requesterId: session.userId,
+      });
+
+      const roomState = room.toRoomState ? room.toRoomState() : room;
+
+      // Broadcast lightweight sync event to room participants (excluding sender)
+      socket.to(roomId).emit('playback_sync', {
+        currentTime: roomState.currentTime,
+        playbackState: roomState.playbackState,
+        timestamp: Date.now(),
+      });
+
+      if (typeof callback === 'function') {
+        callback({ success: true, currentTime: roomState.currentTime });
+      }
+    } catch (err) {
+      logger.error(`Error in sync_playback: ${err.message}`);
+      if (typeof callback === 'function') callback({ success: false, error: err.message });
+    }
+  });
+
+  /**
+   * Event: request_sync
+   * Any client (host or guest) can request the latest frame-accurate sync state.
+   */
+  socket.on('request_sync', async (payload, callback) => {
+    try {
+      const session = sessions.get(socket.id);
+      const parsed = socketRequestSyncSchema.safeParse(payload || {});
+      const targetRoomId = normalizeRoomId(parsed.success ? parsed.data.roomId : (session?.roomId || payload?.roomId));
+      if (!targetRoomId) {
+        if (typeof callback === 'function') callback({ success: false, error: 'roomId required' });
+        return;
+      }
+
+      const room = await RoomService.getRoomById(targetRoomId);
+      const roomState = room.toRoomState ? room.toRoomState() : room;
+
+      const syncData = {
+        success: true,
+        currentTime: roomState.currentTime,
+        playbackState: roomState.playbackState,
+        currentVideoId: roomState.currentVideoId,
+        currentVideoTitle: roomState.currentVideoTitle,
+        timestamp: Date.now(),
+      };
+
+      if (typeof callback === 'function') {
+        callback(syncData);
+      }
+      socket.emit('playback_sync', syncData);
+    } catch (err) {
+      logger.error(`Error in request_sync: ${err.message}`);
+      if (typeof callback === 'function') callback({ success: false, error: err.message });
+    }
+  });
 };
 
 export default registerPlaybackHandlers;

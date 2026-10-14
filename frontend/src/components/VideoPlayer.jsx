@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import YouTube from 'react-youtube';
 import {
   Play,
@@ -56,6 +56,10 @@ export function VideoPlayer({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [seeking, setSeeking] = useState(false);
   const [localProgress, setLocalProgress] = useState(0);
+  const [localDisplayTime, setLocalDisplayTime] = useState(videoState.playedSeconds || 0);
+  const isSeekingRef = useRef(false);
+  const seekLockTimeoutRef = useRef(null);
+  const currentRateRef = useRef(1.0);
   const [playerError, setPlayerError] = useState(null);
   const [userActive, setUserActive] = useState(true);
   const inactivityTimeoutRef = useRef(null);
@@ -252,13 +256,22 @@ export function VideoPlayer({
     }
   }, [volume, isMuted]);
 
+  // Calculate expected playback time accounting for elapsed time since sync
+  const getExpectedPlaybackTime = useCallback(() => {
+    const elapsedSinceSync = videoState.syncTimestamp && videoState.playing && !canControl
+      ? (Date.now() - videoState.syncTimestamp) / 1000
+      : 0;
+    const baseTime = videoState.authoritativeTime ?? videoState.playedSeconds ?? 0;
+    return Math.max(0, baseTime + elapsedSinceSync);
+  }, [videoState.authoritativeTime, videoState.playedSeconds, videoState.syncTimestamp, videoState.playing, canControl]);
+
   // Sync play / pause state changes (e.g. from host or remote sync event)
   useEffect(() => {
     if (!playerRef.current) return;
     try {
       const state = playerRef.current.getPlayerState?.();
       // 1 = playing, 2 = paused, 3 = buffering
-      if (videoState.playing && state !== 1 && state !== 3) {
+      if (videoState.playing && state !== 1 && state !== 3 && !isSeekingRef.current) {
         playerRef.current.playVideo?.();
       } else if (!videoState.playing && state === 1) {
         playerRef.current.pauseVideo?.();
@@ -268,48 +281,124 @@ export function VideoPlayer({
     }
   }, [videoState.playing]);
 
-  // Sync playhead seek if remote drift is detected (> 1.2s difference)
+  // Single coordinated Master Sync & Drift Monitoring Loop (runs every 400ms)
   useEffect(() => {
-    if (!playerRef.current || seeking) return;
-    try {
-      const current = playerRef.current.getCurrentTime?.();
-      if (typeof current === 'number' && typeof videoState.playedSeconds === 'number') {
-        const elapsedSinceSync = videoState.syncTimestamp && videoState.playing && !canControl
-          ? (Date.now() - videoState.syncTimestamp) / 1000
-          : 0;
-        const targetExpectedTime = videoState.playedSeconds + elapsedSinceSync;
-        if (Math.abs(current - targetExpectedTime) > 1.2) {
-          playerRef.current.seekTo?.(targetExpectedTime, true);
-        }
-      }
-    } catch {
-      // player not ready
-    }
-  }, [videoState.playedSeconds, videoState.syncTimestamp, videoState.playing, seeking, canControl]);
-
-  // Periodic ticker to advance local timecode and range slider smoothly
-  useEffect(() => {
-    if (!videoState.playing) return;
     const interval = setInterval(() => {
-      if (playerRef.current && !seeking) {
-        try {
-          const cur = playerRef.current.getCurrentTime?.();
-          const dur = playerRef.current.getDuration?.();
-          if (typeof cur === 'number') {
-            setVideoState((prev) => ({
-              ...prev,
-              playedSeconds: cur,
-              duration: dur || prev.duration,
-            }));
-          }
-        } catch {
-          // ignore
+      if (!playerRef.current || seeking) return;
+
+      try {
+        const player = playerRef.current;
+        const cur = player.getCurrentTime?.();
+        const dur = player.getDuration?.();
+        const playerState = player.getPlayerState?.();
+
+        if (typeof cur !== 'number' || isNaN(cur)) return;
+
+        // Keep local display timestamp updated for smooth slider progression
+        setLocalDisplayTime(cur);
+
+        // HOST role: updates authoritative state directly from player
+        if (canControl) {
+          setVideoState((prev) => ({
+            ...prev,
+            playedSeconds: cur,
+            authoritativeTime: cur,
+            duration: dur || prev.duration,
+          }));
+          return;
         }
+
+        // GUEST role: evaluate drift against authoritative host stream clock
+        const expectedTime = getExpectedPlaybackTime();
+
+        // Update duration if received
+        if (dur && dur !== videoState.duration) {
+          setVideoState((prev) => ({ ...prev, duration: dur }));
+        }
+
+        // If stream is paused remotely, keep player paused and calibrated
+        if (!videoState.playing) {
+          if (currentRateRef.current !== 1.0) {
+            player.setPlaybackRate?.(1.0);
+            currentRateRef.current = 1.0;
+          }
+          if (playerState === 1) {
+            player.pauseVideo?.();
+          }
+          if (Math.abs(cur - expectedTime) > 0.8 && !isSeekingRef.current) {
+            isSeekingRef.current = true;
+            player.seekTo?.(expectedTime, true);
+            setTimeout(() => {
+              isSeekingRef.current = false;
+            }, 800);
+          }
+          return;
+        }
+
+        // Stream is playing remotely:
+        if (playerState !== 1 && playerState !== 3 && !isSeekingRef.current) {
+          player.playVideo?.();
+        }
+
+        // Do not issue seeks or rate modifications while the player is buffering or in seek cooldown
+        if (playerState === 3 || isSeekingRef.current) {
+          return;
+        }
+
+        // Drift = local time - expected host time (positive = ahead, negative = behind)
+        const drift = cur - expectedTime;
+        const absDrift = Math.abs(drift);
+
+        // TIER 1: In Sync (within 0.35s) -> Perfect synchronization
+        if (absDrift <= 0.35) {
+          if (currentRateRef.current !== 1.0) {
+            player.setPlaybackRate?.(1.0);
+            currentRateRef.current = 1.0;
+          }
+        }
+        // TIER 2: Minor drift (0.35s to 1.8s) -> Smooth micro-rate adjustment (NO BUFFERING, NO RELOADS!)
+        else if (absDrift <= 1.8) {
+          if (drift < -0.35) {
+            // Guest is slightly behind host -> glide forward smoothly
+            if (currentRateRef.current !== 1.08) {
+              player.setPlaybackRate?.(1.08);
+              currentRateRef.current = 1.08;
+            }
+          } else if (drift > 0.35) {
+            // Guest is slightly ahead of host -> glide backward smoothly
+            if (currentRateRef.current !== 0.92) {
+              player.setPlaybackRate?.(0.92);
+              currentRateRef.current = 0.92;
+            }
+          }
+        }
+        // TIER 3: Major drift (> 1.8s) -> Direct Seek with Lock
+        else {
+          if (currentRateRef.current !== 1.0) {
+            player.setPlaybackRate?.(1.0);
+            currentRateRef.current = 1.0;
+          }
+          isSeekingRef.current = true;
+          player.seekTo?.(expectedTime, true);
+          if (seekLockTimeoutRef.current) clearTimeout(seekLockTimeoutRef.current);
+          seekLockTimeoutRef.current = setTimeout(() => {
+            isSeekingRef.current = false;
+          }, 1200);
+        }
+      } catch {
+        // Player not ready
       }
     }, 400);
 
     return () => clearInterval(interval);
-  }, [videoState.playing, seeking, setVideoState]);
+  }, [
+    canControl,
+    seeking,
+    videoState.playing,
+    videoState.duration,
+    getExpectedPlaybackTime,
+    setVideoState,
+  ]);
 
   // YouTube IFrame API Ready Callback
   const handlePlayerReady = useCallback(
@@ -332,24 +421,31 @@ export function VideoPlayer({
           event.target.unMute();
         }
 
-        if (videoState.playing) {
-          event.target.playVideo();
-        } else {
-          event.target.pauseVideo();
+        const targetTime = getExpectedPlaybackTime();
+        if (targetTime > 0.5) {
+          event.target.seekTo(targetTime, true);
+          setLocalDisplayTime(targetTime);
         }
 
-        if (videoState.playedSeconds > 0) {
-          const elapsedWhileLoading = videoState.syncTimestamp && videoState.playing
-            ? (Date.now() - videoState.syncTimestamp) / 1000
-            : 0;
-          const calibratedTime = videoState.playedSeconds + elapsedWhileLoading;
-          event.target.seekTo(calibratedTime, true);
+        if (videoState.playing) {
+          try {
+            event.target.playVideo();
+          } catch {
+            // Autoplay blocked by browser policy -> mute and retry play
+            try {
+              event.target.mute();
+              setIsMuted(true);
+              event.target.playVideo();
+            } catch { }
+          }
+        } else {
+          event.target.pauseVideo();
         }
       } catch (err) {
         console.warn('YouTube onReady initial calibration error:', err);
       }
     },
-    [isMuted, volume, videoState.playing, videoState.playedSeconds, videoState.syncTimestamp, setVideoState]
+    [isMuted, volume, videoState.playing, getExpectedPlaybackTime, setIsMuted, setVideoState]
   );
 
   // YouTube IFrame State Change
@@ -360,8 +456,15 @@ export function VideoPlayer({
         setVideoState((prev) => ({ ...prev, buffering: true }));
       } else if (event.data === 1) {
         setVideoState((prev) => ({ ...prev, buffering: false }));
+        // Player has resumed playing -> release seek lock
+        isSeekingRef.current = false;
+        if (seekLockTimeoutRef.current) {
+          clearTimeout(seekLockTimeoutRef.current);
+          seekLockTimeoutRef.current = null;
+        }
       } else if (event.data === 0) {
         setVideoState((prev) => ({ ...prev, playing: false }));
+        isSeekingRef.current = false;
       }
     },
     [setVideoState]
@@ -451,25 +554,39 @@ export function VideoPlayer({
     }
   };
 
-  const progressValue = seeking ? localProgress : videoState.playedSeconds || 0;
+  const progressValue = seeking
+    ? localProgress
+    : canControl
+    ? (videoState.playedSeconds || 0)
+    : (localDisplayTime || videoState.playedSeconds || 0);
   const durationValue = videoState.duration || 0;
 
+  // Memoized initial start time so the YouTube iframe natively mounts at host timestamp
+  const initialStartTime = useMemo(() => {
+    return Math.max(0, Math.floor(getExpectedPlaybackTime()));
+  }, [currentVideoId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Configuration options for programmatic YouTube IFrame API
-  const playerOptions = {
-    width: '100%',
-    height: '100%',
-    playerVars: {
-      autoplay: 1,
-      controls: 0, // Custom synchronized controls
-      rel: 0,
-      modestbranding: 1,
-      playsinline: 1,
-      enablejsapi: 1,
-      disablekb: 1,
-      iv_load_policy: 3,
-      origin: typeof window !== 'undefined' ? window.location.origin : undefined,
-    },
-  };
+  // Memoized by currentVideoId to avoid unneeded iframe recreation on re-renders
+  const playerOptions = useMemo(
+    () => ({
+      width: '100%',
+      height: '100%',
+      playerVars: {
+        autoplay: 1,
+        controls: 0, // Custom synchronized controls
+        rel: 0,
+        modestbranding: 1,
+        playsinline: 1,
+        enablejsapi: 1,
+        disablekb: 1,
+        iv_load_policy: 3,
+        start: initialStartTime > 0 ? initialStartTime : undefined,
+        origin: typeof window !== 'undefined' ? window.location.origin : undefined,
+      },
+    }),
+    [currentVideoId, initialStartTime]
+  );
 
   return (
     <div className="flex flex-col gap-2.5 w-full">

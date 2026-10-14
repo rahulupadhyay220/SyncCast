@@ -143,6 +143,7 @@ export const registerRoomHandlers = (io, socket, sessions) => {
         participants: roomState.participants,
         userRole: role,
         roomId: normalizedRoomId,
+        timestamp: Date.now(),
       };
 
       if (typeof callback === 'function') {

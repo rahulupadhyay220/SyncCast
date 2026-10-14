@@ -530,6 +530,40 @@ export class RoomService {
   }
 
   /**
+   * Authoritative playback heartbeat and timestamp anchor synchronization.
+   * Updates current position and action timestamp without interrupting peers.
+   * 
+   * @param {object} params
+   * @param {string} params.roomId
+   * @param {number} params.currentTime
+   * @param {string} [params.playbackState]
+   * @param {string} [params.requesterId]
+   */
+  static async syncPlayback({ roomId, currentTime, playbackState, requesterId = null }) {
+    const normalizedId = normalizeRoomId(roomId);
+    const room = await RoomService.getRoomById(roomId);
+    if (!room) throw ApiError.notFound('Room not found');
+
+    if (requesterId && room.hostId !== requesterId && room.currentHostId !== requesterId) {
+      throw ApiError.forbidden('Only the room Host can control stream playback sync');
+    }
+
+    if (typeof currentTime === 'number' && !isNaN(currentTime) && currentTime >= 0) {
+      room.currentTime = Math.max(0, currentTime);
+    }
+    if (playbackState === 'playing' || playbackState === 'paused') {
+      room.playbackState = playbackState;
+      if (room.streamStatus !== 'ended') {
+        room.streamStatus = playbackState === 'playing' ? 'live' : 'paused';
+      }
+    }
+    room.lastActionTimestamp = Date.now();
+
+    if (typeof room.save === 'function') await room.save();
+    return room;
+  }
+
+  /**
    * Changes current video stream.
    * Resets playback timestamp to 0.
    * 

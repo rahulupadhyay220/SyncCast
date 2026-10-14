@@ -5,6 +5,7 @@ import { Key, Tv, ArrowRight, User, ShieldAlert, Clock, Lock } from 'lucide-reac
 import { FEATURED_MOVIES } from '../data/movies';
 import { getUserDisplayName } from '../utils/user';
 import { isParticipantBlocked, isParticipantRemoved } from '../utils/moderation';
+import { getBackendUrl } from '../hooks/useWatchParty';
 
 export function JoinPartyPage({
   onJoinParty,
@@ -30,7 +31,7 @@ export function JoinPartyPage({
   const [waitingForHost, setWaitingForHost] = useState(false);
   const [pendingRejoinData, setPendingRejoinData] = useState(null);
 
-  const attemptJoin = React.useCallback((targetCode, targetName) => {
+  const attemptJoin = React.useCallback(async (targetCode, targetName) => {
     const finalCode = (targetCode || '').trim().toUpperCase() || 'SYNC-7729';
     const finalName = (targetName || '').trim() || signedInName || 'Guest';
     // Rule: Anyone joining through invitation code or link enters strictly as a Guest
@@ -73,11 +74,43 @@ export function JoinPartyPage({
       return;
     }
 
+    // Pre-flight fetch of authoritative room timestamp so the guest player starts at the exact host frame immediately
+    let initialRoomData = {};
+    try {
+      const backendUrl = getBackendUrl();
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 1200);
+      const res = await fetch(`${backendUrl}/api/rooms/${finalCode}`, { signal: controller.signal });
+      clearTimeout(timeoutId);
+      if (res.ok) {
+        const json = await res.json();
+        const room = json?.data || json?.room || json;
+        if (room && room.currentVideoId) {
+          let estimatedTime = typeof room.currentTime === 'number' ? Math.max(0, room.currentTime) : 0;
+          if (room.playbackState === 'playing' && room.updatedAt) {
+            const elapsed = (Date.now() - new Date(room.updatedAt).getTime()) / 1000;
+            if (elapsed > 0 && elapsed < 86400) {
+              estimatedTime += elapsed;
+            }
+          }
+          initialRoomData = {
+            initialVideoId: room.currentVideoId,
+            title: room.currentVideoTitle,
+            currentTime: estimatedTime,
+            playbackState: room.playbackState,
+          };
+        }
+      }
+    } catch {
+      // Graceful fallback to default room join
+    }
+
     if (onJoinParty) {
       const res = onJoinParty({
         name: finalName,
         code: finalCode,
         role: finalRole,
+        ...initialRoomData,
       });
       if (res?.isBlocked) {
         navigate('/');

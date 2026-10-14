@@ -34,6 +34,16 @@ export const socketChangeVideoSchema = z.object({
   videoTitle: z.string().trim().max(200).optional(),
 });
 
+export const socketSyncPlaybackSchema = z.object({
+  roomId: z.string().trim().min(1, 'roomId is required'),
+  currentTime: z.number().min(0, 'currentTime must be non-negative'),
+  playbackState: z.enum(['playing', 'paused']).optional(),
+});
+
+export const socketRequestSyncSchema = z.object({
+  roomId: z.string().trim().min(1, 'roomId is required'),
+});
+
 export const socketAssignRoleSchema = z.object({
   roomId: z.string().trim().min(1, 'roomId is required'),
   targetUserId: z.string().trim().min(1, 'targetUserId is required'),
@@ -88,4 +98,6 @@ export default {
   socketRespondRejoinSchema,
   socketChatSchema,
   socketReactionSchema,
+  socketSyncPlaybackSchema,
+  socketRequestSyncSchema,
 };

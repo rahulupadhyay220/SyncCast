@@ -128,6 +128,8 @@ export function useWatchParty() {
     playedSeconds: 0,
     duration: 0,
     buffering: false,
+    authoritativeTime: 0,
+    syncTimestamp: Date.now(),
     lastActionBy: signedInName ? `${signedInName} (Host)` : 'Host',
     lastActionType: 'Initialized',
   });
@@ -270,6 +272,7 @@ export function useWatchParty() {
               videoId: videoStateRef.current.videoId,
               title: videoStateRef.current.title,
               sender: `${userName} (Host)`,
+              timestamp: Date.now(),
             });
           }
         } else if (data.type === 'peer_present' && data.peer) {
@@ -291,36 +294,51 @@ export function useWatchParty() {
           });
         } else if (data.type === 'peer_leave') {
           setParticipants((prev) => prev.filter((p) => p.name !== data.name && p.id !== data.id));
+        } else if (data.type === 'sync_playback' && !canControlPlayback) {
+          const syncTime = typeof data.currentTime === 'number' ? Math.max(0, data.currentTime) : 0;
+          setVideoState((prev) => ({
+            ...prev,
+            playing: data.playbackState === 'playing',
+            playedSeconds: syncTime,
+            authoritativeTime: syncTime,
+            syncTimestamp: data.timestamp || Date.now(),
+          }));
         } else if (data.type === 'play') {
+          const syncTime = typeof data.currentTime === 'number' ? Math.max(0, data.currentTime) : videoStateRef.current.playedSeconds;
           setVideoState((prev) => ({
             ...prev,
             url: data.url || prev.url,
             videoId: data.videoId || prev.videoId,
             title: data.title || prev.title,
             playing: true,
-            playedSeconds: typeof data.currentTime === 'number' ? data.currentTime : prev.playedSeconds,
-            syncTimestamp: Date.now(),
+            playedSeconds: syncTime,
+            authoritativeTime: syncTime,
+            syncTimestamp: data.timestamp || Date.now(),
             lastActionBy: data.sender || prev.lastActionBy,
             lastActionType: 'Resumed playback',
           }));
         } else if (data.type === 'pause') {
+          const syncTime = typeof data.currentTime === 'number' ? Math.max(0, data.currentTime) : videoStateRef.current.playedSeconds;
           setVideoState((prev) => ({
             ...prev,
             url: data.url || prev.url,
             videoId: data.videoId || prev.videoId,
             title: data.title || prev.title,
             playing: false,
-            playedSeconds: typeof data.currentTime === 'number' ? data.currentTime : prev.playedSeconds,
-            syncTimestamp: Date.now(),
+            playedSeconds: syncTime,
+            authoritativeTime: syncTime,
+            syncTimestamp: data.timestamp || Date.now(),
             lastActionBy: data.sender || prev.lastActionBy,
             lastActionType: 'Paused playback',
           }));
         } else if (data.type === 'seek') {
-          const timeStr = new Date((data.currentTime || 0) * 1000).toISOString().slice(14, 19);
+          const syncTime = typeof data.currentTime === 'number' ? Math.max(0, data.currentTime) : 0;
+          const timeStr = new Date(syncTime * 1000).toISOString().slice(14, 19);
           setVideoState((prev) => ({
             ...prev,
-            playedSeconds: data.currentTime,
-            syncTimestamp: Date.now(),
+            playedSeconds: syncTime,
+            authoritativeTime: syncTime,
+            syncTimestamp: data.timestamp || Date.now(),
             lastActionBy: data.sender || prev.lastActionBy,
             lastActionType: `Scrubbed to ${timeStr}`,
           }));
@@ -507,25 +525,32 @@ export function useWatchParty() {
           username: userName,
           role: simulatedRole,
           isHost: isRoomCreator || simulatedRole === 'Host',
-          initialVideoId: videoState.videoId,
-          initialVideoTitle: videoState.title,
-          currentTime: videoState.playedSeconds || 0,
-          playbackState: videoState.playing ? 'playing' : 'paused',
+          initialVideoId: videoStateRef.current.videoId,
+          initialVideoTitle: videoStateRef.current.title,
+          currentTime: videoStateRef.current.playedSeconds || 0,
+          playbackState: videoStateRef.current.playing ? 'playing' : 'paused',
         });
+
+        // If joining as non-host, request frame-accurate sync state immediately
+        if (!isRoomCreator && simulatedRole !== 'Host') {
+          socket.emit('request_sync', { roomId: roomCode });
+        }
       });
 
       // Initial state received on join
       socket.on('initial_room_state', (data) => {
         if (data.currentVideoId) {
           const formatted = formatYouTubeUrl(data.currentVideoId) || data.currentVideoId;
+          const syncTime = typeof data.currentTime === 'number' ? Math.max(0, data.currentTime) : 0;
           setVideoState((prev) => ({
             ...prev,
             videoId: data.currentVideoId,
             url: formatted,
             title: data.currentVideoTitle || prev.title,
             playing: data.playbackState === 'playing',
-            playedSeconds: typeof data.currentTime === 'number' ? data.currentTime : (prev.playedSeconds || 0),
-            syncTimestamp: Date.now(),
+            playedSeconds: syncTime,
+            authoritativeTime: syncTime,
+            syncTimestamp: data.timestamp || Date.now(),
           }));
         }
         if (Array.isArray(data.participants) && data.participants.length > 0) {
@@ -570,11 +595,12 @@ export function useWatchParty() {
           };
           setMessages((prev) => [...prev, joinNotice]);
 
-          // Host immediately calibrates joiner with current live playback frame
-          if ((simulatedRole === 'Host' || isRoomCreator) && socketRef.current?.connected && videoStateRef.current.playing) {
-            socketRef.current.emit('play_video', {
+          // Host immediately calibrates backend room anchor timestamp without interrupting playback
+          if ((simulatedRole === 'Host' || isRoomCreator) && socketRef.current?.connected) {
+            socketRef.current.emit('sync_playback', {
               roomId: roomCode,
               currentTime: videoStateRef.current.playedSeconds || 0,
+              playbackState: videoStateRef.current.playing ? 'playing' : 'paused',
             });
           }
         }
@@ -672,6 +698,24 @@ export function useWatchParty() {
         window.location.href = '/';
       });
 
+      // Authoritative frame synchronization event from host or backend
+      socket.on('playback_sync', (data) => {
+        if (!canControlPlayback && data) {
+          const syncTime = typeof data.currentTime === 'number' ? Math.max(0, data.currentTime) : null;
+          const isPlaying = data.playbackState ? data.playbackState === 'playing' : undefined;
+          setVideoState((prev) => ({
+            ...prev,
+            videoId: data.currentVideoId || prev.videoId,
+            url: data.currentVideoId ? (formatYouTubeUrl(data.currentVideoId) || data.currentVideoId) : prev.url,
+            title: data.currentVideoTitle || prev.title,
+            playing: typeof isPlaying === 'boolean' ? isPlaying : prev.playing,
+            playedSeconds: syncTime !== null ? syncTime : prev.playedSeconds,
+            authoritativeTime: syncTime !== null ? syncTime : (prev.authoritativeTime ?? prev.playedSeconds),
+            syncTimestamp: data.timestamp || Date.now(),
+          }));
+        }
+      });
+
       // Full room updated from backend
       socket.on('room_updated', (data) => {
         if (Array.isArray(data?.participants) && data.participants.length > 0) {
@@ -689,13 +733,15 @@ export function useWatchParty() {
         }
         if (data?.currentVideoId && !canControlPlayback) {
           const formatted = formatYouTubeUrl(data.currentVideoId) || data.currentVideoId;
+          const syncTime = typeof data.currentTime === 'number' ? Math.max(0, data.currentTime) : 0;
           setVideoState((prev) => ({
             ...prev,
             videoId: data.currentVideoId,
             url: formatted,
             title: data.currentVideoTitle || prev.title,
             playing: data.playbackState === 'playing',
-            playedSeconds: typeof data.currentTime === 'number' ? data.currentTime : prev.playedSeconds,
+            playedSeconds: syncTime,
+            authoritativeTime: syncTime,
             syncTimestamp: Date.now(),
           }));
         }
@@ -704,10 +750,13 @@ export function useWatchParty() {
       // Video playback events from backend
       socket.on('video_played', (payload) => {
         const actor = payload.playedBy?.username || 'Host';
+        const isSelf = payload.playedBy?.userId === generatedUserId || payload.playedBy?.username === userName;
+        const syncTime = typeof payload.currentTime === 'number' ? Math.max(0, payload.currentTime) : videoStateRef.current.playedSeconds;
         setVideoState((prev) => ({
           ...prev,
           playing: true,
-          playedSeconds: typeof payload.currentTime === 'number' ? payload.currentTime : prev.playedSeconds,
+          playedSeconds: isSelf && canControlPlayback ? prev.playedSeconds : syncTime,
+          authoritativeTime: syncTime,
           syncTimestamp: Date.now(),
           lastActionBy: `${actor} (${payload.playedBy?.role || 'Host'})`,
           lastActionType: 'Resumed playback',
@@ -716,10 +765,13 @@ export function useWatchParty() {
 
       socket.on('video_paused', (payload) => {
         const actor = payload.pausedBy?.username || 'Host';
+        const isSelf = payload.pausedBy?.userId === generatedUserId || payload.pausedBy?.username === userName;
+        const syncTime = typeof payload.currentTime === 'number' ? Math.max(0, payload.currentTime) : videoStateRef.current.playedSeconds;
         setVideoState((prev) => ({
           ...prev,
           playing: false,
-          playedSeconds: typeof payload.currentTime === 'number' ? payload.currentTime : prev.playedSeconds,
+          playedSeconds: isSelf && canControlPlayback ? prev.playedSeconds : syncTime,
+          authoritativeTime: syncTime,
           syncTimestamp: Date.now(),
           lastActionBy: `${actor} (${payload.pausedBy?.role || 'Host'})`,
           lastActionType: 'Paused playback',
@@ -728,10 +780,13 @@ export function useWatchParty() {
 
       socket.on('video_seeked', (payload) => {
         const actor = payload.seekedBy?.username || 'Host';
-        const timeStr = new Date((payload.currentTime || 0) * 1000).toISOString().slice(14, 19);
+        const isSelf = payload.seekedBy?.userId === generatedUserId || payload.seekedBy?.username === userName;
+        const syncTime = typeof payload.currentTime === 'number' ? Math.max(0, payload.currentTime) : 0;
+        const timeStr = new Date(syncTime * 1000).toISOString().slice(14, 19);
         setVideoState((prev) => ({
           ...prev,
-          playedSeconds: typeof payload.currentTime === 'number' ? payload.currentTime : prev.playedSeconds,
+          playedSeconds: isSelf && canControlPlayback ? prev.playedSeconds : syncTime,
+          authoritativeTime: syncTime,
           syncTimestamp: Date.now(),
           lastActionBy: `${actor} (${payload.seekedBy?.role || 'Host'})`,
           lastActionType: `Seeked to ${timeStr}`,
@@ -749,6 +804,8 @@ export function useWatchParty() {
           title: payload.currentVideoTitle || 'YouTube Video',
           playing: true,
           playedSeconds: 0,
+          authoritativeTime: 0,
+          syncTimestamp: Date.now(),
           lastActionBy: `${actor} (${payload.changedBy?.role || 'Host'})`,
           lastActionType: 'Loaded new YouTube video',
         }));
@@ -890,23 +947,100 @@ export function useWatchParty() {
   const canControlPlayback = simulatedRole === 'Host';
   const canManageUsers = simulatedRole === 'Host';
 
-  // Periodic host sync heartbeat to keep backend room anchor time accurate
+  // Host periodic playback heartbeat: keeps backend room anchor time accurate and broadcasts lightweight sync
   useEffect(() => {
     if (!isInRoom || !canControlPlayback || !videoState.playing) return;
     const syncInterval = setInterval(() => {
-      const cur = videoState.playedSeconds || 0;
-      if (cur > 0 && socketRef.current?.connected) {
-        socketRef.current.emit('play_video', {
+      const cur = videoStateRef.current.playedSeconds || 0;
+      if (socketRef.current?.connected) {
+        socketRef.current.emit('sync_playback', {
           roomId: roomCode,
           currentTime: cur,
+          playbackState: 'playing',
         });
       }
-    }, 4000);
+      try {
+        broadcastRef.current?.postMessage({
+          type: 'sync_playback',
+          currentTime: cur,
+          playbackState: 'playing',
+          timestamp: Date.now(),
+        });
+      } catch { }
+    }, 2500);
+
     return () => clearInterval(syncInterval);
-  }, [isInRoom, canControlPlayback, videoState.playing, videoState.playedSeconds, roomCode]);
+  }, [isInRoom, canControlPlayback, videoState.playing, roomCode]);
+
+  // Pre-flight sync when guest joins room: fetch latest room state immediately from API
+  useEffect(() => {
+    if (!isInRoom || canControlPlayback || !roomCode) return;
+    let isCancelled = false;
+
+    fetch(`${socketUrl}/api/rooms/${roomCode}`)
+      .then((res) => res.json())
+      .then((json) => {
+        if (!isCancelled && json?.success && json?.data?.currentVideoId) {
+          const d = json.data;
+          const syncTime = typeof d.currentTime === 'number' ? Math.max(0, d.currentTime) : 0;
+          setVideoState((prev) => ({
+            ...prev,
+            videoId: d.currentVideoId,
+            url: formatYouTubeUrl(d.currentVideoId) || d.currentVideoId,
+            title: d.currentVideoTitle || prev.title,
+            playing: d.playbackState === 'playing',
+            playedSeconds: syncTime,
+            authoritativeTime: syncTime,
+            syncTimestamp: Date.now(),
+          }));
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [isInRoom, canControlPlayback, roomCode, socketUrl]);
+
+  // Auto-resync when returning to tab from background or network reconnection
+  useEffect(() => {
+    if (!isInRoom || canControlPlayback) return;
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        if (socketRef.current?.connected && roomCode) {
+          socketRef.current.emit('request_sync', { roomId: roomCode });
+        }
+      }
+    };
+
+    const handleWindowFocus = () => {
+      if (socketRef.current?.connected && roomCode) {
+        socketRef.current.emit('request_sync', { roomId: roomCode });
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleWindowFocus);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleWindowFocus);
+    };
+  }, [isInRoom, canControlPlayback, roomCode]);
 
   // Join party action
-  const joinParty = useCallback(({ name, code, initialUrl, title, role = 'Participant', isHost = false }) => {
+  const joinParty = useCallback(({
+    name,
+    code,
+    initialUrl,
+    title,
+    role = 'Participant',
+    isHost = false,
+    initialVideoId,
+    currentTime,
+    playbackState,
+  }) => {
     // When a user starts a stream or hosts, they become the Host.
     // When joining an existing room via invite link/code, isHost is false and role is 'Participant'.
     const isHostRole = Boolean(isHost || role === 'Host');
@@ -939,20 +1073,23 @@ export function useWatchParty() {
     setSimulatedRole(finalRole);
     setIsInRoom(true);
 
-    if (initialUrl && initialUrl.trim()) {
-      const trimmed = initialUrl.trim();
-      const extractedId = extractYouTubeVideoId(trimmed);
-      const formatted = extractedId ? formatYouTubeUrl(extractedId) : trimmed;
+    const initialVid = initialVideoId || (initialUrl ? extractYouTubeVideoId(initialUrl) : null);
+    const initialUrlFormatted = initialVid ? (formatYouTubeUrl(initialVid) || initialVid) : initialUrl;
+    const initialSeekTime = typeof currentTime === 'number' && !isNaN(currentTime) && currentTime >= 0 ? currentTime : 0;
+    const isPlaybackActive = playbackState ? playbackState === 'playing' : (isHostRole && Boolean(initialUrl));
 
+    if (initialVid || typeof currentTime === 'number' || (initialUrl && initialUrl.trim())) {
       setVideoState((prev) => ({
         ...prev,
-        url: formatted,
-        videoId: extractedId || prev.videoId,
+        videoId: initialVid || prev.videoId,
+        url: initialUrlFormatted || prev.url,
         title: title?.trim() || prev.title,
-        playing: true,
-        playedSeconds: 0,
-        lastActionBy: `${finalName} (${finalRole})`,
-        lastActionType: 'Loaded initial video',
+        playing: isPlaybackActive,
+        playedSeconds: initialSeekTime,
+        authoritativeTime: initialSeekTime,
+        syncTimestamp: Date.now(),
+        lastActionBy: isHostRole ? `${finalName} (${finalRole})` : prev.lastActionBy,
+        lastActionType: isHostRole ? 'Loaded initial video' : 'Joined stream session',
       }));
     }
 
@@ -1000,6 +1137,9 @@ export function useWatchParty() {
     setVideoState((prev) => ({
       ...prev,
       playing: nextPlaying,
+      playedSeconds: curTime,
+      authoritativeTime: curTime,
+      syncTimestamp: Date.now(),
       lastActionBy: `${userName} (${simulatedRole})`,
       lastActionType: nextPlaying ? 'Resumed playback' : 'Paused playback',
     }));
@@ -1016,6 +1156,7 @@ export function useWatchParty() {
     broadcastRef.current?.postMessage({
       type: nextPlaying ? 'play' : 'pause',
       currentTime: curTime,
+      timestamp: Date.now(),
       sender: `${userName} (${simulatedRole})`,
     });
   }, [canControlPlayback, videoState.playing, videoState.playedSeconds, userName, simulatedRole, roomCode]);
@@ -1030,6 +1171,8 @@ export function useWatchParty() {
       setVideoState((prev) => ({
         ...prev,
         playedSeconds: targetSeconds,
+        authoritativeTime: targetSeconds,
+        syncTimestamp: Date.now(),
         lastActionBy: `${userName} (${simulatedRole})`,
         lastActionType: `Seeked to ${formattedTime}`,
       }));
@@ -1046,6 +1189,7 @@ export function useWatchParty() {
       broadcastRef.current?.postMessage({
         type: 'seek',
         currentTime: targetSeconds,
+        timestamp: Date.now(),
         sender: `${userName} (${simulatedRole})`,
       });
     },
@@ -1059,6 +1203,8 @@ export function useWatchParty() {
     setVideoState((prev) => ({
       ...prev,
       playedSeconds: 0,
+      authoritativeTime: 0,
+      syncTimestamp: Date.now(),
       playing: true,
       lastActionBy: `${userName} (${simulatedRole})`,
       lastActionType: 'Restarted video from 0:00',
@@ -1080,11 +1226,13 @@ export function useWatchParty() {
     broadcastRef.current?.postMessage({
       type: 'seek',
       currentTime: 0,
+      timestamp: Date.now(),
       sender: `${userName} (${simulatedRole})`,
     });
     broadcastRef.current?.postMessage({
       type: 'play',
       currentTime: 0,
+      timestamp: Date.now(),
       sender: `${userName} (${simulatedRole})`,
     });
   }, [canControlPlayback, userName, simulatedRole, roomCode]);
@@ -1104,6 +1252,8 @@ export function useWatchParty() {
       setVideoState((prev) => ({
         ...prev,
         playedSeconds: target,
+        authoritativeTime: target,
+        syncTimestamp: Date.now(),
         lastActionBy: `${userName} (${simulatedRole})`,
         lastActionType: actionLabel,
       }));
@@ -1121,6 +1271,7 @@ export function useWatchParty() {
         type: 'seek',
         actionType: isForward ? 'skip_forward' : 'skip_backward',
         currentTime: target,
+        timestamp: Date.now(),
         sender: `${userName} (${simulatedRole})`,
       });
     },
@@ -1147,6 +1298,8 @@ export function useWatchParty() {
         title,
         playing: true,
         playedSeconds: 0,
+        authoritativeTime: 0,
+        syncTimestamp: Date.now(),
         duration: 0,
         buffering: false,
         lastActionBy: `${userName} (${simulatedRole})`,
@@ -1168,6 +1321,7 @@ export function useWatchParty() {
         url: formatted,
         videoId: videoId || trimmedUrl,
         title,
+        timestamp: Date.now(),
         sender: `${userName} (${simulatedRole})`,
       });
     },
@@ -1682,6 +1836,27 @@ export function useWatchParty() {
     );
   }, [isRoomCreator, setParticipants]);
 
+  // Explicit sync request helper (can be triggered by UI or network recovery)
+  const requestPlaybackSync = useCallback(() => {
+    if (socketRef.current?.connected && roomCode) {
+      socketRef.current.emit('request_sync', { roomId: roomCode }, (res) => {
+        if (res && res.success && !canControlPlayback) {
+          const syncTime = typeof res.currentTime === 'number' ? Math.max(0, res.currentTime) : 0;
+          setVideoState((prev) => ({
+            ...prev,
+            videoId: res.currentVideoId || prev.videoId,
+            url: res.currentVideoId ? (formatYouTubeUrl(res.currentVideoId) || res.currentVideoId) : prev.url,
+            title: res.currentVideoTitle || prev.title,
+            playing: res.playbackState === 'playing',
+            playedSeconds: syncTime,
+            authoritativeTime: syncTime,
+            syncTimestamp: res.timestamp || Date.now(),
+          }));
+        }
+      });
+    }
+  }, [roomCode, canControlPlayback]);
+
   return {
     // Room info
     isInRoom,
@@ -1708,6 +1883,7 @@ export function useWatchParty() {
     playNextVideo,
     playPreviousVideo,
     changeVideoUrl,
+    requestPlaybackSync,
     volume,
     setVolume,
     isMuted,
