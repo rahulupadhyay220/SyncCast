@@ -131,6 +131,10 @@ export function useWatchParty() {
     lastActionBy: signedInName ? `${signedInName} (Host)` : 'Host',
     lastActionType: 'Initialized',
   });
+  const videoStateRef = useRef(videoState);
+  useEffect(() => {
+    videoStateRef.current = videoState;
+  }, [videoState]);
 
   // Keep host name and self-participant name in sync with signed-in Supabase account during render
   const [prevSignedInName, setPrevSignedInName] = useState(signedInName);
@@ -258,6 +262,16 @@ export function useWatchParty() {
               role: simulatedRole,
             },
           });
+          if (simulatedRole === 'Host' || isRoomCreator) {
+            channel.postMessage({
+              type: videoStateRef.current.playing ? 'play' : 'pause',
+              currentTime: videoStateRef.current.playedSeconds || 0,
+              url: videoStateRef.current.url,
+              videoId: videoStateRef.current.videoId,
+              title: videoStateRef.current.title,
+              sender: `${userName} (Host)`,
+            });
+          }
         } else if (data.type === 'peer_present' && data.peer) {
           // Existing peer responding to our announcement
           setParticipants((prev) => {
@@ -280,16 +294,24 @@ export function useWatchParty() {
         } else if (data.type === 'play') {
           setVideoState((prev) => ({
             ...prev,
+            url: data.url || prev.url,
+            videoId: data.videoId || prev.videoId,
+            title: data.title || prev.title,
             playing: true,
             playedSeconds: typeof data.currentTime === 'number' ? data.currentTime : prev.playedSeconds,
+            syncTimestamp: Date.now(),
             lastActionBy: data.sender || prev.lastActionBy,
             lastActionType: 'Resumed playback',
           }));
         } else if (data.type === 'pause') {
           setVideoState((prev) => ({
             ...prev,
+            url: data.url || prev.url,
+            videoId: data.videoId || prev.videoId,
+            title: data.title || prev.title,
             playing: false,
             playedSeconds: typeof data.currentTime === 'number' ? data.currentTime : prev.playedSeconds,
+            syncTimestamp: Date.now(),
             lastActionBy: data.sender || prev.lastActionBy,
             lastActionType: 'Paused playback',
           }));
@@ -298,6 +320,7 @@ export function useWatchParty() {
           setVideoState((prev) => ({
             ...prev,
             playedSeconds: data.currentTime,
+            syncTimestamp: Date.now(),
             lastActionBy: data.sender || prev.lastActionBy,
             lastActionType: `Scrubbed to ${timeStr}`,
           }));
@@ -502,6 +525,7 @@ export function useWatchParty() {
             title: data.currentVideoTitle || prev.title,
             playing: data.playbackState === 'playing',
             playedSeconds: typeof data.currentTime === 'number' ? data.currentTime : (prev.playedSeconds || 0),
+            syncTimestamp: Date.now(),
           }));
         }
         if (Array.isArray(data.participants) && data.participants.length > 0) {
@@ -545,6 +569,14 @@ export function useWatchParty() {
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           };
           setMessages((prev) => [...prev, joinNotice]);
+
+          // Host immediately calibrates joiner with current live playback frame
+          if ((simulatedRole === 'Host' || isRoomCreator) && socketRef.current?.connected && videoStateRef.current.playing) {
+            socketRef.current.emit('play_video', {
+              roomId: roomCode,
+              currentTime: videoStateRef.current.playedSeconds || 0,
+            });
+          }
         }
       });
 
@@ -664,6 +696,7 @@ export function useWatchParty() {
             title: data.currentVideoTitle || prev.title,
             playing: data.playbackState === 'playing',
             playedSeconds: typeof data.currentTime === 'number' ? data.currentTime : prev.playedSeconds,
+            syncTimestamp: Date.now(),
           }));
         }
       });
@@ -675,6 +708,7 @@ export function useWatchParty() {
           ...prev,
           playing: true,
           playedSeconds: typeof payload.currentTime === 'number' ? payload.currentTime : prev.playedSeconds,
+          syncTimestamp: Date.now(),
           lastActionBy: `${actor} (${payload.playedBy?.role || 'Host'})`,
           lastActionType: 'Resumed playback',
         }));
@@ -686,6 +720,7 @@ export function useWatchParty() {
           ...prev,
           playing: false,
           playedSeconds: typeof payload.currentTime === 'number' ? payload.currentTime : prev.playedSeconds,
+          syncTimestamp: Date.now(),
           lastActionBy: `${actor} (${payload.pausedBy?.role || 'Host'})`,
           lastActionType: 'Paused playback',
         }));
@@ -697,6 +732,7 @@ export function useWatchParty() {
         setVideoState((prev) => ({
           ...prev,
           playedSeconds: typeof payload.currentTime === 'number' ? payload.currentTime : prev.playedSeconds,
+          syncTimestamp: Date.now(),
           lastActionBy: `${actor} (${payload.seekedBy?.role || 'Host'})`,
           lastActionType: `Seeked to ${timeStr}`,
         }));
@@ -853,6 +889,21 @@ export function useWatchParty() {
   // Permissions helper - Rule 1: Only the host has permission to play, pause, or control the streamed video.
   const canControlPlayback = simulatedRole === 'Host';
   const canManageUsers = simulatedRole === 'Host';
+
+  // Periodic host sync heartbeat to keep backend room anchor time accurate
+  useEffect(() => {
+    if (!isInRoom || !canControlPlayback || !videoState.playing) return;
+    const syncInterval = setInterval(() => {
+      const cur = videoState.playedSeconds || 0;
+      if (cur > 0 && socketRef.current?.connected) {
+        socketRef.current.emit('play_video', {
+          roomId: roomCode,
+          currentTime: cur,
+        });
+      }
+    }, 4000);
+    return () => clearInterval(syncInterval);
+  }, [isInRoom, canControlPlayback, videoState.playing, videoState.playedSeconds, roomCode]);
 
   // Join party action
   const joinParty = useCallback(({ name, code, initialUrl, title, role = 'Participant', isHost = false }) => {

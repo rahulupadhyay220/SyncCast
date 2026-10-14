@@ -283,6 +283,21 @@ export class RoomService {
       });
     }
 
+    if (isRoomHost) {
+      if (initialVideoId && initialVideoId !== room.currentVideoId) {
+        room.currentVideoId = initialVideoId;
+        if (initialVideoTitle) room.currentVideoTitle = initialVideoTitle;
+      }
+      if (playbackState) {
+        room.playbackState = playbackState;
+        room.streamStatus = playbackState === 'playing' ? 'live' : 'paused';
+      }
+      if (typeof currentTime === 'number' && currentTime >= 0) {
+        room.currentTime = currentTime;
+      }
+      room.lastActionTimestamp = Date.now();
+    }
+
     await room.save();
 
     // Persist in RoomParticipant collection in MongoDB
@@ -340,9 +355,17 @@ export class RoomService {
         currentVideoTitle: initialVideoTitle || 'Blender Studio: Cosmos Laundromat',
         currentTime: typeof currentTime === 'number' ? currentTime : 0,
         playbackState: playbackState || 'paused',
+        lastActionTimestamp: Date.now(),
         participants: [
           { userId, username, socketId, role: assignedRole, joinedAt: new Date(), isActive: true }
         ],
+        getSyncedCurrentTime() {
+          if (this.playbackState === 'playing' && this.lastActionTimestamp) {
+            const elapsed = (Date.now() - this.lastActionTimestamp) / 1000;
+            return Math.max(0, parseFloat((this.currentTime + elapsed).toFixed(2)));
+          }
+          return parseFloat((this.currentTime || 0).toFixed(2));
+        },
         toRoomState() {
           return {
             roomId: this.roomId,
@@ -353,7 +376,7 @@ export class RoomService {
             streamStatus: this.streamStatus,
             currentVideoId: this.currentVideoId,
             currentVideoTitle: this.currentVideoTitle,
-            currentTime: this.currentTime,
+            currentTime: this.getSyncedCurrentTime(),
             playbackState: this.playbackState,
             participants: this.participants.filter((p) => p.isActive),
           };
@@ -361,6 +384,18 @@ export class RoomService {
       };
       RoomService.inMemoryRooms.set(normalizedId, memRoom);
     } else {
+      if (assignedRole === ROLES.HOST) {
+        if (initialVideoId) memRoom.currentVideoId = initialVideoId;
+        if (initialVideoTitle) memRoom.currentVideoTitle = initialVideoTitle;
+        if (playbackState) {
+          memRoom.playbackState = playbackState;
+          memRoom.streamStatus = playbackState === 'playing' ? 'live' : 'paused';
+        }
+        if (typeof currentTime === 'number' && currentTime >= 0) {
+          memRoom.currentTime = currentTime;
+        }
+        memRoom.lastActionTimestamp = Date.now();
+      }
       const idx = memRoom.participants.findIndex((p) => p.userId === userId || p.username === username);
       if (idx !== -1) {
         memRoom.participants[idx].userId = userId;
@@ -416,7 +451,7 @@ export class RoomService {
    */
   static async playVideo({ roomId, currentTime, requesterId = null }) {
     const normalizedId = normalizeRoomId(roomId);
-    const room = await Room.findOne({ roomId: normalizedId });
+    const room = await RoomService.getRoomById(roomId);
     if (!room) throw ApiError.notFound('Room not found');
 
     if (requesterId && room.hostId !== requesterId && room.currentHostId !== requesterId) {
@@ -425,14 +460,14 @@ export class RoomService {
 
     const anchorTime = typeof currentTime === 'number' && !isNaN(currentTime)
       ? currentTime
-      : room.getSyncedCurrentTime();
+      : (typeof room.getSyncedCurrentTime === 'function' ? room.getSyncedCurrentTime() : (room.currentTime || 0));
 
     room.playbackState = 'playing';
     room.streamStatus = 'live';
     room.currentTime = anchorTime;
     room.lastActionTimestamp = Date.now();
 
-    await room.save();
+    if (typeof room.save === 'function') await room.save();
     logger.info(`[Sync] Room ${normalizedId} PLAY at ${anchorTime}s`);
     return room;
   }
@@ -448,7 +483,7 @@ export class RoomService {
    */
   static async pauseVideo({ roomId, currentTime, requesterId = null }) {
     const normalizedId = normalizeRoomId(roomId);
-    const room = await Room.findOne({ roomId: normalizedId });
+    const room = await RoomService.getRoomById(roomId);
     if (!room) throw ApiError.notFound('Room not found');
 
     if (requesterId && room.hostId !== requesterId && room.currentHostId !== requesterId) {
@@ -457,14 +492,14 @@ export class RoomService {
 
     const freezeTime = typeof currentTime === 'number' && !isNaN(currentTime)
       ? currentTime
-      : room.getSyncedCurrentTime();
+      : (typeof room.getSyncedCurrentTime === 'function' ? room.getSyncedCurrentTime() : (room.currentTime || 0));
 
     room.playbackState = 'paused';
     room.streamStatus = 'paused';
     room.currentTime = freezeTime;
     room.lastActionTimestamp = Date.now();
 
-    await room.save();
+    if (typeof room.save === 'function') await room.save();
     logger.info(`[Sync] Room ${normalizedId} PAUSE at ${freezeTime}s`);
     return room;
   }
@@ -479,7 +514,7 @@ export class RoomService {
    */
   static async seekVideo({ roomId, currentTime, requesterId = null }) {
     const normalizedId = normalizeRoomId(roomId);
-    const room = await Room.findOne({ roomId: normalizedId });
+    const room = await RoomService.getRoomById(roomId);
     if (!room) throw ApiError.notFound('Room not found');
 
     if (requesterId && room.hostId !== requesterId && room.currentHostId !== requesterId) {
@@ -489,7 +524,7 @@ export class RoomService {
     room.currentTime = Math.max(0, currentTime);
     room.lastActionTimestamp = Date.now();
 
-    await room.save();
+    if (typeof room.save === 'function') await room.save();
     logger.info(`[Sync] Room ${normalizedId} SEEK to ${currentTime}s`);
     return room;
   }
@@ -506,7 +541,7 @@ export class RoomService {
    */
   static async changeVideo({ roomId, videoId, videoTitle, requesterId = null }) {
     const normalizedId = normalizeRoomId(roomId);
-    const room = await Room.findOne({ roomId: normalizedId });
+    const room = await RoomService.getRoomById(roomId);
     if (!room) throw ApiError.notFound('Room not found');
 
     if (requesterId && room.hostId !== requesterId && room.currentHostId !== requesterId) {
@@ -522,7 +557,7 @@ export class RoomService {
     room.streamStatus = 'live';
     room.lastActionTimestamp = Date.now();
 
-    await room.save();
+    if (typeof room.save === 'function') await room.save();
     logger.info(`[Sync] Room ${normalizedId} CHANGED VIDEO to ${videoId}`);
     return room;
   }

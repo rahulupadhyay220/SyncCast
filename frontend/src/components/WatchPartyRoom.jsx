@@ -214,8 +214,8 @@ export function WatchPartyRoom({
 
           {/* Video Metadata Card */}
           <div className="p-3.5 sm:p-4 rounded-xl bg-[#090b10] border border-white/[0.07] space-y-3 text-white">
-            <div className="flex items-start justify-between gap-3 sm:gap-4 flex-wrap">
-              <div className="min-w-0 flex-1">
+            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">
+              <div className="min-w-0 w-full sm:flex-1">
                 <div className="flex items-center gap-1.5 mb-1 text-[11px] font-mono uppercase text-[#e50914] font-semibold">
                   <Film className="w-3 h-3" />
                   <span>Now Streaming</span>
@@ -241,10 +241,6 @@ export function WatchPartyRoom({
                       <span>Host Controlled</span>
                     </>
                   )}
-                </span>
-                <span className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-mono px-2 sm:px-2.5 py-1 rounded-md border border-emerald-500/20 bg-emerald-500/10 text-emerald-400">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                  <span className="hidden xs:inline">Screen:</span> Maximize Allowed
                 </span>
               </div>
             </div>

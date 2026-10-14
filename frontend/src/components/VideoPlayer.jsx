@@ -268,20 +268,24 @@ export function VideoPlayer({
     }
   }, [videoState.playing]);
 
-  // Sync playhead seek if remote drift is detected (> 1.5s difference)
+  // Sync playhead seek if remote drift is detected (> 1.2s difference)
   useEffect(() => {
     if (!playerRef.current || seeking) return;
     try {
       const current = playerRef.current.getCurrentTime?.();
       if (typeof current === 'number' && typeof videoState.playedSeconds === 'number') {
-        if (Math.abs(current - videoState.playedSeconds) > 1.5) {
-          playerRef.current.seekTo?.(videoState.playedSeconds, true);
+        const elapsedSinceSync = videoState.syncTimestamp && videoState.playing && !canControl
+          ? (Date.now() - videoState.syncTimestamp) / 1000
+          : 0;
+        const targetExpectedTime = videoState.playedSeconds + elapsedSinceSync;
+        if (Math.abs(current - targetExpectedTime) > 1.2) {
+          playerRef.current.seekTo?.(targetExpectedTime, true);
         }
       }
     } catch {
       // player not ready
     }
-  }, [videoState.playedSeconds, seeking]);
+  }, [videoState.playedSeconds, videoState.syncTimestamp, videoState.playing, seeking, canControl]);
 
   // Periodic ticker to advance local timecode and range slider smoothly
   useEffect(() => {
@@ -335,13 +339,17 @@ export function VideoPlayer({
         }
 
         if (videoState.playedSeconds > 0) {
-          event.target.seekTo(videoState.playedSeconds, true);
+          const elapsedWhileLoading = videoState.syncTimestamp && videoState.playing
+            ? (Date.now() - videoState.syncTimestamp) / 1000
+            : 0;
+          const calibratedTime = videoState.playedSeconds + elapsedWhileLoading;
+          event.target.seekTo(calibratedTime, true);
         }
       } catch (err) {
         console.warn('YouTube onReady initial calibration error:', err);
       }
     },
-    [isMuted, volume, videoState.playing, videoState.playedSeconds, setVideoState]
+    [isMuted, volume, videoState.playing, videoState.playedSeconds, videoState.syncTimestamp, setVideoState]
   );
 
   // YouTube IFrame State Change
